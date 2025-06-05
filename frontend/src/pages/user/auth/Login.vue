@@ -13,7 +13,7 @@
       </div>
 
       <div class="mt-10 sm:mx-auto sm:w-full sm:max-w-sm">
-        <form class="space-y-6" action="#" method="POST">
+        <form class="space-y-6" @submit.prevent="handleSubmit">
           <div>
             <label for="email" class="block text-sm/6 font-medium text-gray-900"
               >Email address</label
@@ -24,6 +24,7 @@
                 name="email"
                 id="email"
                 autocomplete="email"
+                v-model="data.email"
                 required=""
                 class="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
               />
@@ -47,6 +48,7 @@
                 name="password"
                 id="password"
                 autocomplete="current-password"
+                v-model="data.password"
                 required=""
                 class="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
               />
@@ -66,8 +68,10 @@
         <p class="mt-10 text-center text-sm/6 text-gray-500">
           Not a member?
           {{ " " }}
-          <a href="#" class="font-semibold text-indigo-600 hover:text-indigo-500"
-            >Start a 14 day free trial</a
+          <router-link
+            to="/signup"
+            class="font-semibold text-indigo-600 hover:text-indigo-500"
+            >Sign up</router-link
           >
         </p>
       </div>
@@ -78,7 +82,24 @@
 <script setup>
 import { initFlowbite } from "flowbite";
 import GuestLayout from "../../../layouts/user/GuestLayout.vue";
-import { onMounted } from "vue";
+import { ref, onMounted } from "vue";
+import axiosClient from "../../../axios";
+import router from "../../../router/index.js";
+
+const data = ref({
+  email: "",
+  password: "",
+});
+
+const errorMessage = ref("");
+
+function handleSubmit() {
+  axiosClient.get("/sanctum/csrf-cookie").then(() => {
+    axiosClient.post("/login", data.value).then((response) => {
+      router.push({ name: "Home" });
+    });
+  });
+}
 onMounted(() => {
   initFlowbite();
 });
