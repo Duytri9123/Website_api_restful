@@ -1,12 +1,11 @@
-import Home from "../pages/user/Home.vue";
-import Contact from "../pages/user/Contact.vue";
-import About from "../pages/user/About.vue";
-import Login from "../pages/user/auth/Login.vue";
-import Signup from "../pages/user/auth/Signup.vue";
-import NotFound from "../pages/user/NotFound.vue";
-// import Dashboard from "../pages/user/dashboard/Dashboard.vue";
-import DefaultLayout from "../layouts/user/DefaultLayout.vue";
-import { useUserStore } from "../store/modules/user/user.js";
+import Home from "../pages/Home.vue";
+import Contact from "../pages/Contact.vue";
+import About from "../pages/About.vue";
+import Login from "../pages/auth/Login.vue";
+import Signup from "../pages/auth/Signup.vue";
+import NotFound from "../pages/NotFound.vue";
+import DefaultLayout from "../layout/DefaultLayout.vue";
+import { useUserStore } from "../stores/user.js";
 export const userRouters = [
   {
     path: "/",
@@ -55,10 +54,4 @@ export const userRouters = [
     name: "NotFound",
     component: NotFound,
   }
-  // {
-  //   path: "/dashboard",
-  //   name: "Dashboard",
-  //   component: Dashboard,
-  //   beforeEnter: authGuard, // Yêu cầu đăng nhập
-  // },
 ];
