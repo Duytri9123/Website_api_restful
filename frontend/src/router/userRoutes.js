@@ -5,11 +5,12 @@ import Login from "../pages/auth/Login.vue";
 import Signup from "../pages/auth/Signup.vue";
 import NotFound from "../pages/NotFound.vue";
 import DefaultLayout from "../layout/DefaultLayout.vue";
-import { useUserStore } from "../stores/user.js";
+import { userGuard } from "../router/guards.js";
 export const userRouters = [
   {
     path: "/",
     component: DefaultLayout,
+    beforeEnter: userGuard,
     children: [
       {
         path: "/",
@@ -21,22 +22,12 @@ export const userRouters = [
         name: "Contact",
         component: Contact,
       },
-            {
+      {
         path: "/about",
         name: "About",
         component: About,
       },
     ],
-    beforeEnter: async (to, from, next) => {
-      try{
-        const userStore = useUserStore();
-        await userStore.fetchUser();
-        next();
-      }catch (error){
-        console.error("Error fetching user:", error);
-        next(false);
-      }
-    }
   },
   // Các route khác
   {
@@ -50,8 +41,8 @@ export const userRouters = [
     component: Signup,
   },
   {
-    path:'/:pathMatch(.*)*',
+    path: "/:pathMatch(.*)*",
     name: "NotFound",
     component: NotFound,
-  }
+  },
 ];

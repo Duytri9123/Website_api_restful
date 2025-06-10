@@ -2,7 +2,7 @@
 import axios from "axios";
 import { initFlowbite } from "flowbite";
 import { ref, onMounted, onBeforeUnmount, computed, nextTick } from "vue";
-import axiosClient from "../../axios";
+import axiosClient from "../../axiosClient.js";
 import router from "../../router/index.js";
 import { useUserStore } from "../../stores/user.js";
 // Navigation links

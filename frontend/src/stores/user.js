@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import axiosClient from "../axios.js"; // Adjust the path as necessary
+import axiosClient from "../axiosClient.js"; // Adjust the path as necessary
 
 export const useUserStore = defineStore("user", {
   state: () => ({

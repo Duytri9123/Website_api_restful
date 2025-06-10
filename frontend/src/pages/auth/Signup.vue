@@ -133,7 +133,7 @@
 import { initFlowbite } from "flowbite";
 import GuestLayout from "../../layout/GuestLayout.vue";
 import { onMounted, ref } from "vue";
-import axiosClient from "../../axios.js";
+import axiosClient from "../../axiosClient.js";
 import router from "../../router/index.js";
 
 const data = ref({
