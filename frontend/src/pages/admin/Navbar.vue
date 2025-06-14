@@ -720,7 +720,7 @@
 
 <script setup>
 import { initFlowbite } from "flowbite";
-import { onMounted } from "vue";
+import { onMounted,nextTick } from "vue";
 import axiosAdmin from "../../axiosAdmin.js";
 import router from "../../router/index.js";
 const logout = async () => {

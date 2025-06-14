@@ -12,11 +12,10 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/user', function (Request $request) {
         return $request->user();
     });
-
 });
 
 // Routes chỉ dành cho Admin
-Route::middleware(['auth:sanctum', 'admin'])->group(function () {
+Route::middleware(['auth:sanctum', 'isAdmin'])->group(function () {
     // Brands management
     Route::apiResource('brands', BrandsController::class);
 
@@ -30,12 +29,12 @@ Route::middleware(['auth:sanctum', 'admin'])->group(function () {
 // Tùy chọn: Routes cho User thường (chỉ xem, không sửa/xóa)
 Route::middleware(['auth:sanctum'])->group(function () {
     // User có thể xem danh sách và chi tiết, nhưng không thể tạo/sửa/xóa
-    Route::get('/user/brands', [BrandsController::class, 'index']);
-    Route::get('/user/brands/{id}', [BrandsController::class, 'show']);
+    Route::get('/brands', [BrandsController::class, 'index']);
+    Route::get('/brands/{id}', [BrandsController::class, 'show']);
 
-    Route::get('/user/categories', [CategoriesController::class, 'index']);
-    Route::get('/user/categories/{id}', [CategoriesController::class, 'show']);
+    Route::get('/categories', [CategoriesController::class, 'index']);
+    Route::get('/categories/{id}', [CategoriesController::class, 'show']);
 
-    Route::get('/user/products', [ProductsController::class, 'index']);
-    Route::get('/user/products/{id}', [ProductsController::class, 'show']);
+    Route::get('/products', [ProductsController::class, 'index']);
+    Route::get('/products/{id}', [ProductsController::class, 'show']);
 });

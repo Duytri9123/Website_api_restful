@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 use App\Helpers\ProductHelper;
 use App\Models\ProductImage;
 use GuzzleHttp\Handler\Proxy;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 
@@ -20,7 +21,6 @@ class ProductsController extends Controller
     public function index()
     {
         $products = Product::with(['category', 'brand', 'product_images'])->get();
-
         return response()->json(
             $products
         );
@@ -42,11 +42,27 @@ class ProductsController extends Controller
         DB::beginTransaction();
         try {
             $data = $request->validated();
+
+            if (!isset($data['slug'])) {
+                $data['slug'] = Str::slug($data['name']);
+            }
+
             if (!isset($data['sku'])) {
                 $data['sku'] = ProductHelper::generateSKU($data['name']);
             }
+            $data['view_count'] = 0;
+
+            if (!isset($data['status']) || empty($data['status'])) {
+                $data['status'] = 'active';
+            }
+
+
+
             $product = Product::create($data);
-//thêm ảnh mới
+
+            //thêm ảnh mới
+
+
             if ($request->hasFile('product_images')) {
                 $productImages = $request->file('product_images');
 
@@ -100,7 +116,16 @@ class ProductsController extends Controller
             $product = Product::findOrFail($id);
             $data = $request->validated();
 
+            if (isset($data['name']) && $data['name'] !== $product->name) {
+                if (!isset($data['slug']) || empty($data['slug'])) {
+                    $data['slug'] = Str::slug($data['name']);
+                }
+            }
+            $data['updated_by'] = Auth::id();
             $product->update($data);
+            if ($request->has('deleted_images')) {
+                ProductHelper::removeProductImages($request->input('deleted_images'));
+            }
             //nếu có ảnh mới,thêm ảnh mới vào
             if ($request->hasFile('product_images')) {
                 $productImages = $request->file('product_images');
@@ -134,6 +159,7 @@ class ProductsController extends Controller
         DB::beginTransaction();
         try {
             $product = Product::with('product_images')->findOrFail($id);
+            $product->update(['delete_by' => Auth::id()]);
             ProductHelper::deleteProductImages($product);
             $product->delete();
             DB::commit();
@@ -142,6 +168,7 @@ class ProductsController extends Controller
                 'message' => 'Xóa sản phẩm thành công'
             ]);
         } catch (\Exception $e) {
+            DB::rollBack();
             return response()->json(
                 [
                     'success' => false,

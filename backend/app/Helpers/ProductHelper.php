@@ -39,7 +39,7 @@ class ProductHelper
             if ($image->getSize() > $maxFileSize) {
                 continue;
             }
-            $uniqueName = microtime(true). '-' . Str::random(10) . '.' . $image->getClientOriginalExtension();
+            $uniqueName = time(). '-' . Str::random(10) . '.' . $image->getClientOriginalExtension();
             $path = $image->storeAs('product_images', $uniqueName, 'public');
             if ($path) {
                 ProductImage::create([

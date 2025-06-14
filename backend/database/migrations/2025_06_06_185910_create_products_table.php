@@ -2,6 +2,7 @@
 
 use App\Models\Brand;
 use App\Models\Category;
+use App\Models\User;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -18,21 +19,28 @@ return new class extends Migration
             $table->string('name');
             $table->string('slug')->nullable();
 
-            $table->longText('detailed_description')->nullable();
+            $table->longText('description')->nullable();
             $table->text('short_description')->nullable();
 
-            $table->string('sku')->unique();//định danh sản phẩm
+            $table->string('sku')->unique(); //định danh sản phẩm
+            $table->integer('view_count')->default(0); //số lần xem sản phẩm
 
-            $table->decimal('original_price', 10, 2);//giá gốc
-            $table->decimal('selling_price', 10, 2);//giá khuyến mãi
+            $table->integer('quantity'); //hàng tồn kho
 
-            $table->integer('view_count')->default(0); //số lượng xem sản phẩm
-            $table->integer('stock_quantity')->default(0);//hàng tồn kho
+            $table->decimal('weight', 8, 2)->nullable();
+            $table->string('dimensions')->nullable();
 
-            $table->enum('status', ['active', 'inactive', 'out_of_stock', 'discontinued'])->default('active');//trang thai cua san pham
+            $table->decimal('original_price', 10, 2); //giá gốc
+            $table->decimal('selling_price', 10, 2); //giá khuyến mãi
 
-            $table->foreignIdFor(Brand::class,'brand_id')->nullable();
-            $table->foreignIdFor(Category::class,'category_id')->nullable();
+            $table->enum('status', ['active', 'inactive', 'out_of_stock', 'discontinued'])->default('active'); //trang thai cua san pham
+
+            $table->foreignIdFor(Brand::class, 'brand_id')->nullable();
+            $table->foreignIdFor(Category::class, 'category_id')->nullable();
+
+            $table->foreignIdFor(User::class, 'created_by')->nullable();
+            $table->foreignIdFor(User::class, 'updated_by')->nullable();
+            $table->foreignIdFor(User::class, 'delete_by')->nullable();
             $table->timestamps();
         });
     }

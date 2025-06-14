@@ -2,13 +2,13 @@ import axios from "axios";
 import router from "./router/index.js"; // Đảm bảo đường dẫn đúng đến router của bạn
 
 // Tạo một instance của axios với cấu hình mặc định
-const axiosClient = axios.create({
+const axiosAdmin = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000",
   timeout: 43200,
   withCredentials: true,
   withXSRFToken: true,
 });
-axiosClient.interceptors.response.use(
+axiosAdmin.interceptors.response.use(
   (response) => {
     return response;
   },
@@ -20,4 +20,4 @@ axiosClient.interceptors.response.use(
   }
 );
 
-export default axiosClient;
+export default axiosAdmin;

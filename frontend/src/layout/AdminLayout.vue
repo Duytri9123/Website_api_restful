@@ -13,11 +13,6 @@
 <script setup>
 import Navbar from "../pages/admin/Navbar.vue";
 import Sidebar from "../pages/admin/Sidebar.vue";
-import { initFlowbite } from "flowbite";
-import { onMounted } from "vue";
-onMounted(() => {
-  initFlowbite();
-});
 </script>
 
 <style lang="scss" scoped></style>

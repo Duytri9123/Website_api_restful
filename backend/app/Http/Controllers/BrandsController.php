@@ -34,13 +34,13 @@ class BrandsController extends Controller
         $data = $request->validate(
             [
                 'name' => 'required|string|max:255',
-                'slug' => 'required|string|max:255',
+                'slug' => 'string|max:255',
 
             ]
         );
 
-        if ($request->hasFile('image')) {
-            $path = $request->file('image')->store('brand_image', 'public');
+        if ($request->hasFile('img_url')) {
+            $path = $request->file('img_url')->store('brand_image', 'public');
             $data['img_url'] = Storage::url($path);
         }
 
@@ -87,7 +87,7 @@ class BrandsController extends Controller
         $data = $request->validate(
             [
                 'name' => 'required|string|max:255',
-                'slug' => 'required|string|max:255',
+                'slug' => 'string|max:255',
             ]
         );
         if ($request->hasFile('img_url')) {

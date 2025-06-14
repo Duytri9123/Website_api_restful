@@ -71,7 +71,7 @@
                 </li>
                 <li>
                   <a
-                    href="#"
+                    href="https://github.com/Duytri9123"
                     class="text-gray-500 hover:text-gray-900 dark:hover:text-white"
                   >
                     <svg

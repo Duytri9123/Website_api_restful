@@ -7,6 +7,7 @@ use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use App\Helpers\CategoryHelper;
+use Illuminate\Support\Str;
 
 class CategoriesController extends Controller
 {
@@ -33,9 +34,13 @@ class CategoriesController extends Controller
     {
         $data = $request->validate([
             'name' => 'required|string|max:255',
-            'slug' => 'required|string|max:255',
+            'slug' => 'string|max:255',
             'parent_id' => 'nullable|exists:categories,id',
         ]);
+
+        if (!isset($data['slug'])) {
+            $data['slug'] = Str::slug($data['name']);
+        }
         //upload ảnh nếu có
         if ($request->hasFile('img_url')) {
             $path = $request->file('img_url')->store('category_image', 'public');
@@ -104,7 +109,7 @@ class CategoriesController extends Controller
         }
         $data = $request->validate([
             'name' => 'required|string|max:255',
-            'slug' => 'required|string|max:255',
+            'slug' => 'string|max:255',
             'parent_id' => 'nullable|exists:categories,id',
 
         ]);

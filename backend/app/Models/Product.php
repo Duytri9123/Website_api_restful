@@ -9,7 +9,32 @@ use Spatie\Sluggable\SlugOptions;
 class Product extends Model
 {
     use HasSlug;
-    protected $fillable = ['name', 'slug', 'detailed_description', 'short_description', 'sku', 'original_price', 'selling_price', 'view_count', 'stock_quantity', 'status', 'brand_id', 'category_id'];
+    protected $fillable = [
+        'name',
+        'slug',
+        'description',
+        'short_description',
+        'sku',
+        'original_price',
+        'selling_price',
+        'view_count',
+        'quantity',
+        'status',
+        'weight',
+        'dimensions',
+        'brand_id',
+        'category_id',
+        'created_by',
+        'updated_by',
+        'deleted_by',
+    ];
+    protected $casts = [
+        'original_price' => 'decimal:2',
+        'selling_price' => 'decimal:2',
+        'weight' => 'decimal:2',
+        'view_count' => 'integer',
+        'quantity' => 'integer',
+    ];
 
     public function getSlugOptions(): SlugOptions
     {
