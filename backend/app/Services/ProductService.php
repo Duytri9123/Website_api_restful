@@ -19,16 +19,52 @@ class ProductService
 
     public function list(Request $request)
     {
-        $query = Product::query()->with(['brand:id,name,slug', 'category:id,name,slug', 'thumbnailImage', 'defaultVariant']);
+        $query = Product::query()->with([
+            'brand',
+            'category',
+            'thumbnailImage',
+            'defaultVariant' => function ($q) {
+                $q->with('attributeValues.productAttribute'); // Tải thuộc tính cho biến thể mặc định
+            },
+            'attributeValues.productAttribute' // Nếu có thuộc tính cấp sản phẩm
+        ]);
 
+        // Lọc theo category_id
         if ($request->filled('category_id')) {
             $query->where('category_id', $request->input('category_id'));
         }
+        // Lọc theo từ khóa tìm kiếm
         if ($request->filled('search')) {
-            $query->where('name', 'like', '%' . $request->input('search') . '%');
+            $searchTerm = '%' . $request->input('search') . '%';
+            $query->where(function ($q) use ($searchTerm) {
+                $q->where('name', 'like', $searchTerm)
+                    ->orWhere('description', 'like', $searchTerm); // Có thể tìm kiếm cả trong mô tả
+            });
+        }
+        // Thêm các bộ lọc khác nếu cần (ví dụ: theo brand_id, status, giá...)
+        if ($request->filled('brand_id')) {
+            $query->where('brand_id', $request->input('brand_id'));
+        }
+        if ($request->filled('status')) {
+            // Đảm bảo $request->input('status') là một giá trị hợp lệ của ProductStatus Enum
+            $query->where('status', $request->input('status'));
         }
 
-        return $query->latest()->paginate(12)->withQueryString();
+        // Sắp xếp
+        if ($request->filled('sort_by') && $request->filled('sort_order')) {
+            $sortBy = $request->input('sort_by');
+            $sortOrder = $request->input('sort_order');
+            // Chỉ cho phép các cột sắp xếp hợp lệ để tránh SQL Injection
+            $allowedSorts = ['name', 'created_at', 'price']; // price cần join với defaultVariant
+            if (in_array($sortBy, $allowedSorts)) {
+                $query->orderBy($sortBy, $sortOrder);
+            }
+        } else {
+            $query->latest(); // Mặc định sắp xếp theo mới nhất
+        }
+
+
+        return $query->paginate(12)->withQueryString();
     }
 
     public function create(array $validatedData, Request $request): Product
@@ -114,16 +150,22 @@ class ProductService
     {
         $assignedImageIndexes = [];
 
-        foreach ($variantsData as $i => $variantData) {
+        $attributeMap = $product->variants
+            ->mapWithKeys(function ($variant) {
+                $key = implode('-', collect($variant->attributeValues->pluck('id'))->sort()->values()->all());
+                return [$key => $variant];
+            });
 
+        foreach ($variantsData as $variantData) {
             if (!empty($variantData['image_indexes'])) {
+                $attrIds = collect($variantData['attribute_value_ids'] ?? [])->sort()->values()->all();
+                $key = implode('-', $attrIds);
 
-                $variantModel = $product->variants->firstWhere('id', $variantData['id'] ?? null);
+                $variantModel = $attributeMap[$key] ?? null;
 
                 if ($variantModel) {
                     foreach ($variantData['image_indexes'] as $imageIndex) {
                         if (isset($uploadedFiles[$imageIndex])) {
-
                             $this->imageService->store($uploadedFiles[$imageIndex], $product, $variantModel);
                             $assignedImageIndexes[] = $imageIndex;
                         }
@@ -133,7 +175,7 @@ class ProductService
         }
 
         foreach ($uploadedFiles as $index => $file) {
-            if ($file && !in_array($index, $assignedImageIndexes)) {
+            if (!in_array($index, $assignedImageIndexes)) {
                 $this->imageService->store($file, $product);
             }
         }

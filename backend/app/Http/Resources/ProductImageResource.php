@@ -17,12 +17,11 @@ class ProductImageResource extends JsonResource
     {
         return [
             'id' => $this->id,
-            'url' => Storage::url($this->image),
+            'url' => $this->image,
             'alt_text' => $this->alt_text,
             'display_order' => $this->display_order,
             // Chỉ hiển thị attribute_value_id nếu nó tồn tại (khác null)
             'attribute_value_id' => $this->when($this->attribute_value_id !== null, $this->attribute_value_id),
-
             'media_type' => $this->media_type,
         ];
     }

@@ -12,7 +12,9 @@ class ProductAttributeController extends Controller
 {
     public function index()
     {
-        return ProductAttributeResource::collection(ProductAttribute::latest()->get());
+        return ProductAttributeResource::collection(
+            ProductAttribute::with('attributeValues')->latest()->get()
+        );
     }
 
     public function store(StoreProductAttributeRequest $request)

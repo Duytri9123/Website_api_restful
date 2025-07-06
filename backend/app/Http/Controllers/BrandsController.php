@@ -16,6 +16,7 @@ class BrandsController extends Controller
      */
     public function index()
     {
+        // return Brand::all();
         return BrandResource::collection(Brand::latest()->paginate(10));
     }
 

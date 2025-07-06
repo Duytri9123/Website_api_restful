@@ -25,6 +25,8 @@ class ImageService
 
         return $product->images()->create([
             'image' => $path,
+            'alt_text' => $file->getClientOriginalName(),
+            'display_order' => $product->images()->count(),
             'media_type' => $type,
             'product_variant_id' => $variant?->id,
         ]);

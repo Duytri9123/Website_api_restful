@@ -17,6 +17,14 @@ class ProductAttributeResource extends JsonResource
         return [
             'id' => $this->id,
             'name' => $this->name,
+            'values'=> $this->whenLoaded('attributeValues', function () {
+                return $this->attributeValues->map(function ($value) {
+                    return [
+                        'id' => $value->id,
+                        'value' => $value->value,
+                    ];
+                });
+            }),
         ];
     }
 }

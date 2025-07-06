@@ -2,107 +2,141 @@
 import { ref, computed, onMounted } from "vue";
 import axiosAdmin from "../../../axiosAdmin.js";
 
-// Category-related refs
 const categories = ref([]);
-const error = ref(null);
-const parentId = ref(null);
-const isCategoryModal = ref(false);
-const isDeleteCategoryModal = ref(false);
-const categoryToDelete = ref(null);
-const showAddCategoryForm = ref(false);
-const categoryLoading = ref(false);
-const isEditingCategory = ref(false);
-const categoryToEdit = ref(null);
-
-// Brand-related refs
 const brands = ref([]);
-const isBrandModal = ref(false);
-const isDeleteBrandModal = ref(false);
-const brandToDelete = ref(null);
+const error = ref(null);
+
+const categoryForm = ref({ name: "", parent_id: null, img_url: "" });
+const brandForm = ref({ name: "", img_url: "" });
+
+const categoryPreviewImage = ref(null);
+const brandPreviewImage = ref(null);
+
+const categoryLoading = ref(false);
 const brandLoading = ref(false);
+
+const isCategoryModal = ref(false);
+const isBrandModal = ref(false);
+const isDeleteCategoryModal = ref(false);
+const isDeleteBrandModal = ref(false);
+
+const isEditingCategory = ref(false);
 const isEditingBrand = ref(false);
+
+const categoryToEdit = ref(null);
 const brandToEdit = ref(null);
+const categoryToDelete = ref(null);
+const brandToDelete = ref(null);
 
-// Category form
-const categoryForm = ref({
-  name: "",
-  parent_id: null,
-  img_url: "",
-});
+const parentId = ref(null);
+const showAddCategoryForm = ref(false);
+const breadcrumbs = ref([]);
 
-// Brand form
-const brandForm = ref({
-  name: "",
-  img_url: "",
-});
+const getImageUrl = (path) => `${axiosAdmin.defaults.baseURL}/storage/${path}`;
 
 // Reset category form
 const resetCategoryForm = () => {
-  categoryForm.value = {
-    name: "",
-    parent_id: parentId.value,
-    img_url: "",
-  };
+  categoryForm.value = { name: "", parent_id: parentId.value, img_url: "" };
   categoryPreviewImage.value = null;
   isEditingCategory.value = false;
   categoryToEdit.value = null;
 };
 
-// Reset brand form
 const resetBrandForm = () => {
-  brandForm.value = {
-    name: "",
-    img_url: "",
-  };
+  brandForm.value = { name: "", img_url: "" };
   brandPreviewImage.value = null;
   isEditingBrand.value = false;
   brandToEdit.value = null;
 };
 
-// Navigate back to a breadcrumb level
-const goBackToBreadcrumb = (crumbId) => {
-  parentId.value = crumbId;
-  showAddCategoryForm.value = false;
-  categoryForm.value.parent_id = crumbId;
+const handleFileChange = (event, formRef, previewRef) => {
+  const file = event.target.files[0];
+  if (!file) return;
+  const allowedTypes = [
+    "image/jpeg",
+    "image/jpg",
+    "image/png",
+    "image/gif",
+    "image/svg+xml",
+  ];
+  if (!allowedTypes.includes(file.type)) {
+    alert("Please select a valid image file (JPEG, PNG, GIF, SVG)");
+    return;
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    alert("File size must not exceed 5MB");
+    return;
+  }
+  formRef.value.img_url = file;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    previewRef.value = e.target.result;
+  };
+  reader.readAsDataURL(file);
 };
 
-// Navigate to a category
+const removeImage = (formRef, previewRef) => {
+  formRef.value.img_url = "";
+  previewRef.value = null;
+};
+
+// Handle category image change
+const handleCategoryImageChange = (event) => {
+  handleFileChange(event, categoryForm, categoryPreviewImage);
+};
+
+const removeCategoryImage = () => {
+  removeImage(categoryForm, categoryPreviewImage);
+};
+// Handle brand image change
+const handleBrandImageChange = (event) => {
+  handleFileChange(event, brandForm, brandPreviewImage);
+};
+
+const removeBrandImage = () => {
+  removeImage(brandForm, brandPreviewImage);
+};
+
+//crumbs
+const currentChildren = computed(() => {
+  if (breadcrumbs.value.length === 0) return categories.value;
+
+  return breadcrumbs.value[breadcrumbs.value.length - 1].children || [];
+});
+
 const goToCategory = (category) => {
-  parentId.value = category.id;
-  showAddCategoryForm.value = false;
-  categoryForm.value.parent_id = category.id;
+  breadcrumbs.value.push(category);
 };
 
-// Build breadcrumbs
-const breadcrumbs = computed(() => {
-  const crumbs = [{ id: null, name: "All Categories" }];
-  let currentId = parentId.value;
-  const path = [];
+const goToBreadcrumb = (index) => {
+  breadcrumbs.value = breadcrumbs.value.slice(0, index + 1);
+};
 
-  while (currentId) {
-    const cat = categories.value.find((c) => c.id === currentId);
-    if (cat) {
-      path.unshift(cat);
-      currentId = cat.parent_id;
-    } else {
-      currentId = null;
+const goToRoot = () => {
+  breadcrumbs.value = [];
+};
+
+// Hàm đệ quy để làm phẳng cây danh mục
+const flattenCategories = (categories, prefix = "") => {
+  let flatList = [];
+  for (const category of categories) {
+    flatList.push({
+      id: category.id,
+      // Vô hiệu hóa option nếu đó là danh mục đang được chỉnh sửa
+      disabled: isEditingCategory.value && category.id === categoryToEdit.value?.id,
+      name: `${prefix} ${category.name}`,
+    });
+    if (category.children && category.children.length > 0) {
+      flatList = flatList.concat(flattenCategories(category.children, prefix + "-"));
     }
   }
-  return crumbs.concat(path);
-});
+  return flatList;
+};
 
-// Get displayed categories based on parentId
-const displayedCategories = computed(() => {
-  return categories.value.filter((cat) => cat.parent_id === parentId.value);
-});
 
-// Get parent category name for form display
-const currentParentForm = computed(() => {
-  if (parentId.value) {
-    const parent = categories.value.find((c) => c.id === parentId.value);
-    return parent ? parent.name : "Unknown";
-  }
-  return "";
+const categoryOptions = computed(() => {
+  const rootCats = categories.value.filter((c) => !c.parent_id);
+  return flattenCategories(rootCats);
 });
 
 // Open category modal for adding or editing
@@ -118,18 +152,71 @@ const openCategoryModal = (category = null) => {
     categoryPreviewImage.value = category.img_url ? getImageUrl(category.img_url) : null;
   } else {
     resetCategoryForm();
-    isEditingCategory.value = false;
   }
   isCategoryModal.value = true;
 };
 
-// Close category modal
 const closeCategoryModal = () => {
   isCategoryModal.value = false;
   resetCategoryForm();
 };
 
-// Open brand modal for adding or editing
+const addOrUpdateCategory = async () => {
+  if (!categoryForm.value.name.trim()) return alert("Please enter a category name");
+
+  categoryLoading.value = true;
+  const formData = new FormData();
+  formData.append("name", categoryForm.value.name.trim());
+  formData.append("parent_id", categoryForm.value.parent_id || "");
+  if (categoryForm.value.img_url instanceof File) {
+    formData.append("img_url", categoryForm.value.img_url);
+  }
+  if (isEditingCategory.value) formData.append("_method", "PUT");
+
+  try {
+    const url = isEditingCategory.value
+      ? `/api/categories/${categoryToEdit.value.id}`
+      : "/api/categories";
+    const res = await axiosAdmin.post(url, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    alert(`Category ${isEditingCategory.value ? "updated" : "created"} successfully!`);
+    await fetchCategories();
+    closeCategoryModal();
+  } catch (err) {
+    console.error(err);
+    alert(err.response?.data?.message || "Error saving category");
+  } finally {
+    categoryLoading.value = false;
+  }
+};
+
+const openDeleteCategoryModal = (category) => {
+  categoryToDelete.value = category;
+  isDeleteCategoryModal.value = true;
+};
+
+const closeDeleteCategoryModal = () => {
+  categoryToDelete.value = null;
+  isDeleteCategoryModal.value = false;
+};
+
+const deleteCategory = async () => {
+  if (!categoryToDelete.value) return;
+  categoryLoading.value = true;
+  try {
+    await axiosAdmin.delete(`/api/categories/${categoryToDelete.value.id}`);
+    alert("Category deleted successfully");
+    await fetchCategories();
+    closeDeleteCategoryModal();
+  } catch (err) {
+    alert(err.response?.data?.message || "Error deleting category");
+  } finally {
+    categoryLoading.value = false;
+  }
+};
+
+// Open delete brand modal
 const openBrandModal = (brand = null) => {
   if (brand) {
     isEditingBrand.value = true;
@@ -141,325 +228,72 @@ const openBrandModal = (brand = null) => {
     brandPreviewImage.value = brand.img_url ? getImageUrl(brand.img_url) : null;
   } else {
     resetBrandForm();
-    isEditingBrand.value = false;
   }
   isBrandModal.value = true;
 };
 
-// Close brand modal
 const closeBrandModal = () => {
   isBrandModal.value = false;
   resetBrandForm();
 };
 
-// Get image URL
-const getImageUrl = (path) => `${axiosAdmin.defaults.baseURL}${path}`;
-
-// Category preview image
-const categoryPreviewImage = ref(null);
-
-// Brand preview image
-const brandPreviewImage = ref(null);
-
-// Handle file change for category
-const handleCategoryFileChange = (event) => {
-  const file = event.target.files[0];
-  if (!file) return;
-
-  const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/svg+xml"];
-  if (!allowedTypes.includes(file.type)) {
-    alert("Please select a valid image file (JPEG, PNG, GIF, SVG)");
-    return;
-  }
-
-  if (file.size > 5 * 1024 * 1024) {
-    alert("File size must not exceed 5MB");
-    return;
-  }
-
-  categoryForm.value.img_url = file;
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    categoryPreviewImage.value = e.target.result;
-  };
-  reader.readAsDataURL(file);
-};
-
-// Handle file change for brand
-const handleBrandFileChange = (event) => {
-  const file = event.target.files[0];
-  if (!file) return;
-
-  const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/svg+xml"];
-  if (!allowedTypes.includes(file.type)) {
-    alert("Please select a valid image file (JPEG, PNG, GIF, SVG)");
-    return;
-  }
-
-  if (file.size > 5 * 1024 * 1024) {
-    alert("File size must not exceed 5MB");
-    return;
-  }
-
-  brandForm.value.img_url = file;
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    brandPreviewImage.value = e.target.result;
-  };
-  reader.readAsDataURL(file);
-};
-
-// Remove category preview image
-const removeCategoryImage = () => {
-  categoryForm.value.img_url = "";
-  categoryPreviewImage.value = null;
-};
-
-// Remove brand preview image
-const removeBrandImage = () => {
-  brandForm.value.img_url = "";
-  brandPreviewImage.value = null;
-};
-
-// Add category
-const addCategory = async () => {
-  if (!categoryForm.value.name.trim()) {
-    alert("Please enter a category name");
-    return;
-  }
-
-  categoryLoading.value = true;
-  try {
-    const formData = new FormData();
-    formData.append("name", categoryForm.value.name.trim());
-    formData.append("parent_id", categoryForm.value.parent_id || "");
-
-    if (categoryForm.value.img_url instanceof File) {
-      formData.append("img_url", categoryForm.value.img_url);
-    }
-
-    await axiosAdmin.get("sanctum/csrf-cookie");
-    const response = await axiosAdmin.post("/api/categories", formData, {
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
-    });
-
-    if (response.status === 201 || response.status === 200) {
-      alert("Category added successfully!");
-      await fetchCategories();
-      closeCategoryModal();
-    }
-  } catch (err) {
-    console.error("Error adding category:", err);
-    const errorMessage = err.response?.data?.message || "An error occurred while adding the category";
-    alert(errorMessage);
-  } finally {
-    categoryLoading.value = false;
-  }
-};
-
-// Update category
-const updateCategory = async () => {
-  if (!categoryForm.value.name.trim()) {
-    alert("Please enter a category name");
-    return;
-  }
-
-  categoryLoading.value = true;
-  try {
-    const formData = new FormData();
-    formData.append("name", categoryForm.value.name.trim());
-    formData.append("parent_id", categoryForm.value.parent_id || "");
-    formData.append("_method", "PUT");
-
-    if (categoryForm.value.img_url instanceof File) {
-      formData.append("img_url", categoryForm.value.img_url);
-    } else if (!categoryForm.value.img_url) {
-      formData.append("img_url", "");
-    }
-
-    await axiosAdmin.get("sanctum/csrf-cookie");
-    const response = await axiosAdmin.post(`/api/categories/${categoryToEdit.value.id}`, formData, {
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
-    });
-
-    if (response.status === 200 || response.status === 201) {
-      alert("Category updated successfully!");
-      await fetchCategories();
-      closeCategoryModal();
-    }
-  } catch (err) {
-    console.error("Error updating category:", err);
-    const errorMessage = err.response?.data?.message || "An error occurred while updating the category";
-    alert(errorMessage);
-  } finally {
-    categoryLoading.value = false;
-  }
-};
-
-// Add brand
-const addBrand = async () => {
-  if (!brandForm.value.name.trim()) {
-    alert("Please enter a brand name");
-    return;
-  }
+const addOrUpdateBrand = async () => {
+  if (!brandForm.value.name.trim()) return alert("Please enter a brand name");
 
   brandLoading.value = true;
+  const formData = new FormData();
+  formData.append("name", brandForm.value.name.trim());
+  if (brandForm.value.img_url instanceof File) {
+    formData.append("img_url", brandForm.value.img_url);
+  }
+  if (isEditingBrand.value) formData.append("_method", "PUT");
+
   try {
-    const formData = new FormData();
-    formData.append("name", brandForm.value.name.trim());
-
-    if (brandForm.value.img_url instanceof File) {
-      formData.append("img_url", brandForm.value.img_url);
-    }
-
-    await axiosAdmin.get("sanctum/csrf-cookie");
-    const response = await axiosAdmin.post("/api/brands", formData, {
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
+    const url = isEditingBrand.value
+      ? `/api/brands/${brandToEdit.value.id}`
+      : "/api/brands";
+    const res = await axiosAdmin.post(url, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
     });
-
-    if (response.status === 201 || response.status === 200) {
-      alert("Brand added successfully!");
-      await fetchBrands();
-      closeBrandModal();
-    }
+    alert(`Brand ${isEditingBrand.value ? "updated" : "created"} successfully!`);
+    await fetchBrands();
+    closeBrandModal();
   } catch (err) {
-    console.error("Error adding brand:", err);
-    const errorMessage = err.response?.data?.message || "An error occurred while adding the brand";
-    alert(errorMessage);
+    console.error(err);
+    alert(err.response?.data?.message || "Error saving brand");
   } finally {
     brandLoading.value = false;
   }
 };
-
-// Update brand
-const updateBrand = async () => {
-  if (!brandForm.value.name.trim()) {
-    alert("Please enter a brand name");
-    return;
-  }
-
-  brandLoading.value = true;
-  try {
-    const formData = new FormData();
-    formData.append("name", brandForm.value.name.trim());
-    formData.append("_method", "PUT");
-
-    if (brandForm.value.img_url instanceof File) {
-      formData.append("img_url", brandForm.value.img_url);
-    } else if (!brandForm.value.img_url) {
-      formData.append("img_url", "");
-    }
-
-    await axiosAdmin.get("sanctum/csrf-cookie");
-    const response = await axiosAdmin.post(`/api/brands/${brandToEdit.value.id}`, formData, {
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
-    });
-
-    if (response.status === 200 || response.status === 201) {
-      alert("Brand updated successfully!");
-      await fetchBrands();
-      closeBrandModal();
-    }
-  } catch (err) {
-    console.error("Error updating brand:", err);
-    const errorMessage = err.response?.data?.message || "An error occurred while updating the brand";
-    alert(errorMessage);
-  } finally {
-    brandLoading.value = false;
-  }
-};
-
-// Open delete category modal
-const openDeleteCategoryModal = (category) => {
-  categoryToDelete.value = category;
-  isDeleteCategoryModal.value = true;
-};
-
-// Close delete category modal
-const closeDeleteCategoryModal = () => {
-  isDeleteCategoryModal.value = false;
-  categoryToDelete.value = null;
-};
-
-// Open delete brand modal
 const openDeleteBrandModal = (brand) => {
   brandToDelete.value = brand;
   isDeleteBrandModal.value = true;
 };
 
-// Close delete brand modal
 const closeDeleteBrandModal = () => {
-  isDeleteBrandModal.value = false;
   brandToDelete.value = null;
+  isDeleteBrandModal.value = false;
 };
 
-// Delete category
-const deleteCategory = async () => {
-  if (!categoryToDelete.value) return;
-
-  const hasChildren = categories.value.some((cat) => cat.parent_id === categoryToDelete.value.id);
-  if (hasChildren) {
-    alert("Cannot delete this category as it has subcategories. Please delete subcategories first.");
-    closeDeleteCategoryModal();
-    return;
-  }
-
-  categoryLoading.value = true;
-  try {
-    await axiosAdmin.get("sanctum/csrf-cookie");
-    const response = await axiosAdmin.delete(`/api/categories/${categoryToDelete.value.id}`);
-
-    if (response.status === 200 || response.status === 204) {
-      alert("Category deleted successfully!");
-      await fetchCategories();
-      closeDeleteCategoryModal();
-    }
-  } catch (err) {
-    console.error("Error deleting category:", err);
-    const errorMessage = err.response?.data?.message || "An error occurred while deleting the category";
-    alert(errorMessage);
-  } finally {
-    categoryLoading.value = false;
-  }
-};
-
-// Delete brand
 const deleteBrand = async () => {
   if (!brandToDelete.value) return;
-
   brandLoading.value = true;
   try {
-    await axiosAdmin.get("sanctum/csrf-cookie");
-    const response = await axiosAdmin.delete(`/api/brands/${brandToDelete.value.id}`);
-
-    if (response.status === 200 || response.status === 204) {
-      alert("Brand deleted successfully!");
-      await fetchBrands();
-      closeDeleteBrandModal();
-    }
+    await axiosAdmin.delete(`/api/brands/${brandToDelete.value.id}`);
+    alert("Brand deleted successfully");
+    await fetchBrands();
+    closeDeleteBrandModal();
   } catch (err) {
-    console.error("Error deleting brand:", err);
-    const errorMessage = err.response?.data?.message || "An error occurred while deleting the brand";
-    alert(errorMessage);
+    alert(err.response?.data?.message || "Error deleting brand");
   } finally {
     brandLoading.value = false;
   }
 };
-
 // Fetch categories
 const fetchCategories = async () => {
   try {
-    await axiosAdmin.get("sanctum/csrf-cookie");
     const response = await axiosAdmin.get("/api/categories");
-    categories.value = response.data;
+    categories.value = response.data.data;
   } catch (err) {
     console.error("Error fetching categories:", err);
     error.value = "Unable to load categories. Please try again later.";
@@ -469,9 +303,8 @@ const fetchCategories = async () => {
 // Fetch brands
 const fetchBrands = async () => {
   try {
-    await axiosAdmin.get("sanctum/csrf-cookie");
     const response = await axiosAdmin.get("/api/brands");
-    brands.value = response.data;
+    brands.value = response.data.data;
   } catch (err) {
     console.error("Error fetching brands:", err);
     error.value = "Unable to load brands. Please try again later.";
@@ -487,12 +320,16 @@ onMounted(async () => {
   <div class="min-h-screen bg-gray-50 p-6 sm:p-8 font-sans antialiased text-gray-800">
     <div class="max-w-screen-3xl px-4 mx-auto lg:px-12 mb-4 w-full">
       <div class="relative bg-white shadow-md dark:bg-gray-800 sm:rounded-lg">
-        <div class="flex flex-col items-center justify-between p-4 space-y-3 md:flex-row md:space-y-0 md:space-x-4">
+        <div
+          class="flex flex-col items-center justify-between p-4 space-y-3 md:flex-row md:space-y-0 md:space-x-4"
+        >
           <div class="w-full md:w-1/2">
             <form class="flex items-center">
               <label for="simple-search" class="sr-only">Search</label>
               <div class="relative w-full">
-                <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                <div
+                  class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none"
+                >
                   <svg
                     aria-hidden="true"
                     class="w-5 h-5 text-gray-500 dark:text-gray-400"
@@ -573,10 +410,23 @@ onMounted(async () => {
         class="text-sm font-medium text-gray-500 mb-2 flex items-center bg-white p-3 rounded-lg shadow-sm border border-gray-100"
       >
         <ol class="list-none p-0 inline-flex flex-wrap items-center">
-          <li v-for="(crumb, index) in breadcrumbs" :key="crumb.id" class="flex items-center">
+          <li class="flex items-center">
+            <a
+              @click="goToRoot"
+              class="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer transition-colors duration-200"
+            >
+              All Categories
+            </a>
+            <span v-if="breadcrumbs.length > 0" class="mx-2 text-gray-400">/</span>
+          </li>
+          <li
+            v-for="(crumb, index) in breadcrumbs"
+            :key="crumb.id"
+            class="flex items-center"
+          >
             <template v-if="index < breadcrumbs.length - 1">
               <a
-                @click="goBackToBreadcrumb(crumb.id)"
+                @click="goToBreadcrumb(index)"
                 class="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer transition-colors duration-200"
               >
                 {{ crumb.name }}
@@ -592,13 +442,23 @@ onMounted(async () => {
 
       <div class="bg-white shadow-xl rounded-lg p-6 border border-gray-200 mb-8">
         <h2 class="text-2xl font-bold mb-6 text-gray-800">
-          {{ breadcrumbs[breadcrumbs.length - 1].name }}
-          <span v-if="displayedCategories.length > 0" class="text-lg text-gray-500 font-normal">
-            ({{ displayedCategories.length }} categories)
+          {{
+            breadcrumbs.length > 0
+              ? breadcrumbs[breadcrumbs.length - 1].name
+              : "All Categories"
+          }}
+          <span
+            v-if="currentChildren.length > 0"
+            class="text-lg text-gray-500 font-normal"
+          >
+            ({{ currentChildren.length }} categories)
           </span>
         </h2>
 
-        <div v-if="displayedCategories.length === 0" class="text-gray-600 italic text-center py-8">
+        <div
+          v-if="currentChildren.length === 0"
+          class="text-gray-600 italic text-center py-8"
+        >
           No categories available.
           <p v-if="!showAddCategoryForm" class="mt-2">
             Let's
@@ -617,7 +477,7 @@ onMounted(async () => {
           class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4"
         >
           <div
-            v-for="category in displayedCategories"
+            v-for="category in currentChildren"
             :key="category.id"
             class="relative bg-gray-50 border border-gray-200 rounded-lg p-4 flex flex-col items-center justify-center text-center cursor-pointer hover:shadow-lg hover:border-blue-300 transition duration-200 ease-in-out group"
             @click="goToCategory(category)"
@@ -670,11 +530,10 @@ onMounted(async () => {
               <p class="text-base font-semibold text-gray-800 group-hover:text-blue-800">
                 {{ category.name }}
               </p>
+
               <p class="text-xs text-gray-500 mt-1">
-                <span
-                  v-if="categories.filter((c) => c.parent_id === category.id).length > 0"
-                >
-                  ({{ categories.filter((c) => c.parent_id === category.id).length }} sub)
+                <span v-if="category.children && category.children.length > 0">
+                  ({{ category.children.length }} sub)
                 </span>
                 <span v-else> (0 sub) </span>
               </p>
@@ -802,7 +661,8 @@ onMounted(async () => {
               <span class="sr-only">Close modal</span>
             </button>
           </div>
-          <form @submit.prevent="isEditingCategory ? updateCategory() : addCategory()">
+
+          <form @submit.prevent="addOrUpdateCategory">
             <div class="grid gap-4 mb-4 sm:grid-cols-2">
               <div>
                 <label
@@ -833,24 +693,16 @@ onMounted(async () => {
                   v-model="categoryForm.parent_id"
                   class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
                 >
-                  <option :value="null">-- Root Category --</option>
-                  <optgroup
-                    v-if="currentParentForm && parentId"
-                    :label="`Current Parent (${currentParentForm})`"
+                  <option :value="null">Root Category </option>
+                  <option
+                    v-for="cat in categoryOptions"
+                    :key="cat.id"
+                    :value="cat.id"
+                    :disabled="cat.disabled"
                   >
-                    <option :value="parentId">
-                      {{ currentParentForm }}
-                    </option>
-                  </optgroup>
-                  <optgroup label="Level 1 Categories">
-                    <option
-                      v-for="cat in categories.filter((c) => !c.parent_id)"
-                      :key="cat.id"
-                      :value="cat.id"
-                    >
-                      {{ cat.name }}
-                    </option>
-                  </optgroup>
+
+                    {{ cat.name }}
+                  </option>
                 </select>
               </div>
             </div>
@@ -920,7 +772,7 @@ onMounted(async () => {
                     id="category-dropzone-file"
                     type="file"
                     class="hidden"
-                    @change="handleCategoryFileChange"
+                    @change="handleCategoryImageChange"
                     accept="image/svg+xml, image/png, image/jpeg, image/gif"
                   />
                 </label>
@@ -933,11 +785,38 @@ onMounted(async () => {
                 :disabled="categoryLoading"
                 class="w-full sm:w-auto justify-center text-white inline-flex bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:outline-none focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800 disabled:opacity-50"
               >
-                {{ categoryLoading ? (isEditingCategory ? "Updating..." : "Adding...") : (isEditingCategory ? "Update Category" : "Add Category") }}
+                <span v-if="categoryLoading" class="inline-flex items-center">
+                  <svg
+                    class="animate-spin -ml-1 mr-3 h-4 w-4 text-white"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      class="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      stroke-width="4"
+                    ></circle>
+                    <path
+                      class="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    ></path>
+                  </svg>
+                  {{ isEditingCategory ? "Updating..." : "Adding..." }}
+                </span>
+                <span v-else>
+                  {{ isEditingCategory ? "Update Category" : "Add Category" }}
+                </span>
               </button>
+
               <button
                 @click.prevent="closeCategoryModal"
                 type="button"
+                :disabled="categoryLoading"
                 class="w-full justify-center sm:w-auto text-gray-500 inline-flex items-center bg-white hover:bg-gray-100 focus:ring-4 focus:outline-none focus:ring-primary-300 rounded-lg border border-gray-200 text-sm font-medium px-5 py-2.5 hover:text-gray-900 focus:z-10 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-500 dark:hover:text-white dark:hover:bg-gray-600 dark:focus:ring-gray-600"
               >
                 <svg
@@ -998,7 +877,7 @@ onMounted(async () => {
               <span class="sr-only">Close modal</span>
             </button>
           </div>
-          <form @submit.prevent="isEditingBrand ? updateBrand() : addBrand()">
+          <form @submit.prevent="addOrUpdateBrand">
             <div class="grid gap-4 mb-4 sm:grid-cols-1">
               <div>
                 <label
@@ -1084,7 +963,7 @@ onMounted(async () => {
                     id="brand-dropzone-file"
                     type="file"
                     class="hidden"
-                    @change="handleBrandFileChange"
+                    @change="handleBrandImageChange"
                     accept="image/svg+xml, image/png, image/jpeg, image/gif"
                   />
                 </label>
@@ -1097,7 +976,15 @@ onMounted(async () => {
                 :disabled="brandLoading"
                 class="w-full sm:w-auto justify-center text-white inline-flex bg-green-700 hover:bg-green-800 focus:ring-4 focus:outline-none focus:ring-green-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center dark:bg-green-600 dark:hover:bg-green-700 dark:focus:ring-green-800 disabled:opacity-50"
               >
-                {{ brandLoading ? (isEditingBrand ? "Updating..." : "Adding...") : (isEditingBrand ? "Update Brand" : "Add Brand") }}
+                {{
+                  brandLoading
+                    ? isEditingBrand
+                      ? "Updating..."
+                      : "Adding..."
+                    : isEditingBrand
+                    ? "Update Brand"
+                    : "Add Brand"
+                }}
               </button>
               <button
                 @click.prevent="closeBrandModal"
@@ -1132,7 +1019,9 @@ onMounted(async () => {
       class="flex overflow-y-auto overflow-x-hidden fixed top-0 right-0 left-0 z-50 justify-center items-center w-full md:inset-0 h-[calc(100%-1rem)] md:h-full"
     >
       <div class="relative p-4 w-full max-w-md h-full md:h-auto">
-        <div class="relative p-4 text-center bg-white rounded-lg shadow dark:bg-gray-800 sm:p-5">
+        <div
+          class="relative p-4 text-center bg-white rounded-lg shadow dark:bg-gray-800 sm:p-5"
+        >
           <button
             @click="closeDeleteCategoryModal"
             type="button"
@@ -1200,7 +1089,9 @@ onMounted(async () => {
       class="flex overflow-y-auto overflow-x-hidden fixed top-0 right-0 left-0 z-50 justify-center items-center w-full md:inset-0 h-[calc(100%-1rem)] md:h-full"
     >
       <div class="relative p-4 w-full max-w-md h-full md:h-auto">
-        <div class="relative p-4 text-center bg-white rounded-lg shadow dark:bg-gray-800 sm:p-5">
+        <div
+          class="relative p-4 text-center bg-white rounded-lg shadow dark:bg-gray-800 sm:p-5"
+        >
           <button
             @click="closeDeleteBrandModal"
             type="button"
@@ -1261,4 +1152,3 @@ onMounted(async () => {
     </div>
   </div>
 </template>
-

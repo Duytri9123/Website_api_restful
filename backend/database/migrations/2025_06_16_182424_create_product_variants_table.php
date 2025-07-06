@@ -22,6 +22,7 @@ return new class extends Migration
             $table->decimal('weight', 8, 2)->nullable();
             $table->string('dimensions')->nullable();
             $table->boolean('is_default')->default(false);
+            $table->json('image_indexes')->nullable()->after('is_default');
             $table->timestamps();
         });
     }

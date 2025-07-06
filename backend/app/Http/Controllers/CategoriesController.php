@@ -15,6 +15,7 @@ class CategoriesController extends Controller
 
     public function index()
     {
+
         $categories = Category::whereNull('parent_id')->with('allChildren')->latest()->get();
 
         return CategoryResource::collection($categories);
