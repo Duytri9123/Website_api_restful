@@ -9,6 +9,7 @@ use App\Http\Resources\ProductResource;
 use App\Models\Product;
 use App\Services\ProductService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
 
 class ProductsController extends Controller
@@ -30,7 +31,7 @@ class ProductsController extends Controller
             // Trả về response thành công với mã 201
             return (new ProductResource($product->loadAllRelations()))
                 ->response()
-                ->setStatusCode(Response::HTTP_CREATED); // 201
+                ->setStatusCode(Response::HTTP_CREATED);
 
         } catch (\Exception $e) {
 
@@ -45,8 +46,10 @@ class ProductsController extends Controller
 
     public function update(UpdateProductRequest $request, Product $product)
     {
+        Log::info('ProductsController@update: Request data received', $request->all());
+        Log::info('ProductsController@update: Files data received', $request->allFiles());
+        // Kiểm tra cụ thể trường thumbnail:
         try {
-
             $this->productService->update($product, $request->validated(), $request);
 
             return (new ProductResource($product->loadAllRelations()))->response();

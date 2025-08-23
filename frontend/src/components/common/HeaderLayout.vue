@@ -6,6 +6,7 @@ import axiosClient from "../../axiosClient.js";
 import router from "../../router/index.js";
 import { useUserStore } from "../../stores/user.js";
 import { useCartStore } from "../../stores/cart.js";
+import { useFavoriteStore } from "../../stores/favorite.js";
 // Navigation links
 
 const isLoggedIn = ref(false);
@@ -37,8 +38,10 @@ const user = computed(() => userStore.user);
 const cartStore = useCartStore();
 // use cart count from store
 const cartItemCount = computed(() => cartStore.count);
-
 const notificationCount = ref(0);
+
+const favoriteStore = useFavoriteStore();
+favoriteStore.loadFromLocalStorage();
 
 //
 const mobileSearchInputRef = ref(null);
@@ -53,6 +56,9 @@ const mobileUserDropdownToggleRef = ref(null);
 
 const hasNotifications = computed(() => notificationCount.value >= 0);
 const hasCartItems = computed(() => cartItemCount.value > 0);
+
+const favoriteCount = computed(() => favoriteStore.favoriteCount);
+const hasFavorites = computed(() => favoriteCount.value > 0);
 
 const toggleUserDropdown = () => {
   userDropdownOpen.value = !userDropdownOpen.value;
@@ -282,7 +288,8 @@ onBeforeUnmount(() => {
           <span class="sr-only">Unread notifications</span>
         </button>
         <!-- Favorites -->
-        <button
+        <router-link
+          to="/favorites"
           class="hidden lg:block text-gray-500 hover:text-blue-700 dark:text-gray-400 dark:hover:text-blue-500 p-2 rounded-full focus:outline-none focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-700"
           aria-label="Favorites"
         >
@@ -300,8 +307,15 @@ onBeforeUnmount(() => {
               d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
             ></path>
           </svg>
+          <span
+            v-if="hasFavorites"
+            class="absolute top-3 ml-2 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-pink-100 bg-pink-600 rounded-full"
+          >
+            {{ favoriteCount }}
+          </span>
           <span class="sr-only">Favorites</span>
-        </button>
+        </router-link>
+
         <!-- Shopping Cart -->
         <router-link
           to="/cart"
@@ -401,7 +415,7 @@ onBeforeUnmount(() => {
           </div>
         </div>
         <!-- Sign Up / Login buttons -->
-        <div v-else class="flex space-x-2 hidden lg:flex">
+        <div v-else class="space-x-2 hidden lg:flex">
           <router-link
             to="/signup"
             class="text-gray-800 dark:text-white hover:bg-gray-50 focus:ring-4 focus:ring-gray-300 font-medium rounded-lg text-sm px-3 py-1.5 lg:px-4 lg:py-2 dark:hover:bg-gray-700 focus:outline-none dark:focus:ring-gray-800"
@@ -601,8 +615,8 @@ onBeforeUnmount(() => {
             >
           </button>
           <!-- Favorites -->
-          <button
-            type="button"
+          <router-link
+            to="/favorites"
             class="flex flex-col items-center text-gray-500 hover:text-blue-700 dark:text-gray-400 dark:hover:text-blue-500 p-2 rounded-full"
             aria-label="Favorites"
           >
@@ -621,7 +635,7 @@ onBeforeUnmount(() => {
               ></path>
             </svg>
             <span class="text-xs">Favorites</span>
-          </button>
+          </router-link>
           <!-- Shopping Cart -->
           <router-link
             to="/cart"

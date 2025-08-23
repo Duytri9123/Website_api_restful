@@ -606,7 +606,7 @@ onMounted(async () => {
                 v-if="brand.img_url"
                 :src="getImageUrl(brand.img_url)"
                 :alt="brand.name"
-                class="w-20 h-20 object-contain mb-3 rounded-full border border-gray-200"
+                class="w-20 h-20 object-contain mb-3  border border-gray-200"
               />
               <div
                 v-else

@@ -40,19 +40,4 @@ class ProductReview extends Model
         return $query->where('is_approved', true);
     }
 
-    public function scopeByRating($query, $rating)
-    {
-        return $query->where('rating', $rating);
-    }
-
-    public function scopeVerifiedPurchase($query)
-    {
-        return $query->where('is_verified_purchase', true);
-    }
-
-    // Accessors
-    public function getFormattedRatingAttribute()
-    {
-        return str_repeat('★', $this->rating) . str_repeat('☆', 5 - $this->rating);
-    }
 }

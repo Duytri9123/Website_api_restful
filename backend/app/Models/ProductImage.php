@@ -18,6 +18,7 @@ class ProductImage extends Model
 
     protected $casts = [
         'display_order' => 'integer',
+        'is_thumbnail' => 'boolean',
     ];
     public function product()
     {

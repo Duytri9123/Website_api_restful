@@ -1,7 +1,9 @@
 <script setup>
 import { onMounted, reactive, ref, watch, computed, nextTick } from "vue";
 import FormProducts from "./FormProducts.vue";
+import PreviewProducts from "./PreviewProduct.vue";
 import axiosAdmin from "../../../axiosAdmin.js";
+import DeleteProduct from "./DeleteProduct.vue";
 
 const loading = ref(true);
 const error = ref(null);
@@ -13,8 +15,14 @@ const brands = ref([]);
 const attributes = ref([]);
 
 const showProductForm = ref(false);
+const showPreview = ref(false);
+const showDeleteModal = ref(false);
+
+const previewData = ref(null);
 const editingProductData = ref(null);
 const isEditingProduct = ref(false);
+const productToDelete = ref(null);
+
 const getImageUrl = (path) => `${axiosAdmin.defaults.baseURL}/storage/${path}`;
 //table
 const getAverageRating = (product) => {
@@ -49,7 +57,6 @@ const openAddProduct = () => {
   showProductForm.value = true;
   error.value = null;
 };
-
 const openEditProduct = async (product) => {
   error.value = null;
   try {
@@ -58,7 +65,7 @@ const openEditProduct = async (product) => {
 
     editingProductData.value = fullProductData;
     isEditingProduct.value = true;
-    showProductForm.value = true; 
+    showProductForm.value = true;
 
     console.log("Full product data fetched for editing:", fullProductData);
   } catch (err) {
@@ -66,25 +73,26 @@ const openEditProduct = async (product) => {
     error.value = "Không thể tải chi tiết sản phẩm. Vui lòng thử lại.";
   }
 };
-
-const deleteProduct = async (productId) => {
-  if (!confirm("Are you sure you want to delete this product?")) {
-    return;
-  }
-  try {
-    await axiosAdmin.delete(`/api/products/${productId}`);
-    alert("Product deleted successfully!");
-    fetchProducts(); // Refresh the list after deletion
-  } catch (err) {
-    console.error("Error deleting product:", err);
-    error.value = "Failed to delete product. Please try again.";
-  }
-};
-
 const handleProductSubmitted = () => {
   showProductForm.value = false;
   fetchProducts();
   alert("Thao tác sản phẩm thành công!");
+};
+//preview
+const openPreviewModal = async (product) => {
+  try {
+    const response = await axiosAdmin.get(`/api/products/${product.id}`);
+    const PreviewProductData = response.data.data;
+
+    previewData.value = PreviewProductData;
+    showPreview.value = true;
+    isEditingProduct.value = false;
+    showProductForm.value = false;
+    console.log("Full product data fetched for Preview:", PreviewProductData);
+  } catch (err) {
+    console.error("Lỗi khi tải chi tiết sản phẩm để chỉnh sửa:", err);
+    error.value = "Không thể tải chi tiết sản phẩm. Vui lòng thử lại.";
+  }
 };
 const handleFormClosed = () => {
   showProductForm.value = false;
@@ -92,11 +100,36 @@ const handleFormClosed = () => {
   isEditingProduct.value = false;
   error.value = null;
 };
-
+const handlePreviewClosed = () => {
+  showPreview.value = false;
+  error.value = null;
+};
 const handleRequestRefreshAttributes = () => {
   fetchAttributes();
 };
-//end form 
+//remove product
+const openDelete = (product) => {
+  productToDelete.value = product;
+  showDeleteModal.value = true;
+};
+const closeDelete = () => {
+  productToDelete.value = null;
+  showDeleteModal.value = false;
+};
+const deleteProduct = async (productId) => {
+  if (!confirm("Are you sure you want to delete this product?")) {
+    return;
+  }
+  try {
+    await axiosAdmin.delete(`/api/products/${productId}`);
+    alert("Product deleted successfully!");
+    fetchProducts();
+  } catch (err) {
+    console.error("Error deleting product:", err);
+    error.value = "Failed to delete product. Please try again.";
+  }
+};
+//end form
 
 const fetchProducts = async () => {
   try {
@@ -117,7 +150,6 @@ const fetchAttributes = async () => {
   try {
     const response = await axiosAdmin.get("/api/attributes");
     attributes.value = response.data.data;
-    console.log("Attributes:", attributes.value);
   } catch (err) {
     console.error("Error Fetching Attributes:", err);
     error.value = "Failed to fetch attributes. Please try again.";
@@ -133,7 +165,6 @@ const fetchCategories = async () => {
     error.value = "Failed to fetch categories. Please try again.";
   }
 };
-
 const fetchBrands = async () => {
   try {
     const response = await axiosAdmin.get("/api/brands");
@@ -1105,8 +1136,8 @@ onMounted(async () => {
                         v-if="product.product_images && product.product_images.length > 0"
                         :src="
                           getImageUrl(
-                            product.product_images[0].image_url ||
-                              product.product_images[0].image
+                            product.thumbnail_image[0].url ||
+                              product.thumbnail_image[0].image
                           )
                         "
                         alt="Image"
@@ -1303,6 +1334,21 @@ onMounted(async () => {
       @productSubmitted="handleProductSubmitted"
       @formClosed="handleFormClosed"
       @requestRefreshAttributes="handleRequestRefreshAttributes"
+    />
+    <PreviewProducts
+      v-if="showPreview"
+      :showPreview="showPreview"
+      :productData="previewData"
+      :categories="categories"
+      :brands="brands"
+      :attributes="attributes"
+      @PreviewClosed="handlePreviewClosed"
+    />
+    <DeleteProduct
+      v-if="showDeleteModal"
+      :product="productToDelete"
+      @delete="deleteProduct"
+      @deleteClose="closeDelete"
     />
   </div>
 </template>

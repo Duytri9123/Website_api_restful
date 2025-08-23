@@ -1,5 +1,4 @@
 import { defineStore } from "pinia";
-
 export const useCartStore = defineStore("cart", {
   state: () => ({
     items: [],
@@ -7,58 +6,69 @@ export const useCartStore = defineStore("cart", {
   }),
 
   getters: {
+    cartItems: (state) => state.items || [],
     totalItems: (state) => state.count,
-    cartItems: (state) => state.items,
-    totalPrice: (state) => {
-      return state.items.reduce(
-        (total, item) => total + item.price * item.quantity,
+    totalPrice: (state) =>
+      state.items.reduce(
+        (total, item) => total + item.variant.selling_price * item.quantity,
         0
-      );
-    },
+      ),
   },
 
   actions: {
-    addToCart(product) {
-      const existingItem = this.items.find((item) => item.id === product.id);
+    addToCart(product, variant, quantity = 1) {
+      const existingItem = this.items.find(
+        (item) => item?.variant?.id === variant?.id
+      );
 
       if (existingItem) {
-        existingItem.quantity += 1;
+        existingItem.quantity += quantity;
       } else {
         this.items.push({
-          ...product,
-          quantity: 1,
+          productId: product.id,
+          name: product.name,
+          quantity,
+          variant,
         });
       }
-      this.count = this.item.reduce((total, item) => total + item.quantity, 0);
+
+      this.updateCount();
       this.saveToLocalStorage();
     },
 
-    removeFromCart(productId) {
-      const index = this.items.findIndex((item) => item.id === productId);
-      if (index > 1) {
-        this.items.splice(index, 1);
-      }
-      this.count = this.items.reduce((total, item) => total + item.quantity);
+    removeFromCart(variantId) {
+      this.items = this.items.filter((item) => item.variant.id !== variantId);
+      this.updateCount();
       this.saveToLocalStorage();
     },
 
-    updateQuantity(productId, quantity) {
-      const item = this.items.find((index) => item.id === productId);
+    updateQuantity(variantId, quantity) {
+      const item = this.items.find((i) => i.variant.id === variantId);
       if (item) {
-        item.quantity = quantity;
-        if (quantity <= 0) {
-          this.removeFromCart(productId);
-          return;
-        }
+        item.quantity = quantity > 0 ? quantity : 1;
       }
-      this.count = this.items.reduce((total, item) => total + item.quantity, 0);
-      this.saveToLocalStorage;
+      this.updateCount();
+      this.saveToLocalStorage();
     },
+
+    updateVariant(variantId, newVariant) {
+      const item = this.items.find((i) => i.variant.id === variantId);
+      if (item && newVariant) {
+        item.variant = newVariant;
+      }
+      this.saveToLocalStorage();
+    },
+
     clearCart() {
       this.items = [];
       this.count = 0;
       this.saveToLocalStorage();
     },
+
+    updateCount() {
+      this.count = this.items.reduce((total, item) => total + item.quantity, 0);
+    },
+
     saveToLocalStorage() {
       if (typeof window !== "undefined") {
         localStorage.setItem(
@@ -70,17 +80,18 @@ export const useCartStore = defineStore("cart", {
         );
       }
     },
+
     loadFromLocalStorage() {
       if (typeof window !== "undefined") {
         const saved = localStorage.getItem("cart");
         if (saved) {
           const data = JSON.parse(saved);
-          this.count = data.count || 0;
           this.items = data.items || [];
+          this.count = data.count || 0;
         }
       }
     },
   },
-  
 });
+
 export default useCartStore;

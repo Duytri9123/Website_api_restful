@@ -32,16 +32,14 @@ class VariantService
             if (empty($variantData['id']) && empty($variantData['sku'])) {
                 $variantData['sku'] = $this->skuService->generate($product, $variantData['attribute_value_ids']);
             }
-
+            // variant
             $variant = $product->variants()->updateOrCreate(
                 ['id' => $variantData['id'] ?? null],
-                Arr::except($variantData, ['id', 'attribute_value_ids', 'image_indexes'])
+                Arr::except($variantData, ['id', 'attribute_value_ids'])
             );
-
             $variant->attributeValues()->sync($variantData['attribute_value_ids']);
         }
     }
-
 
     protected function deleteByIds(array $variantIds): void
     {

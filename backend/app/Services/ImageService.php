@@ -9,30 +9,53 @@ use Exception;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class ImageService
 {
-    //thêm 1 sản phẩm
-    public function store(UploadedFile $file, Product $product, ?ProductVariant $variant = null)
-    {
-        // Xác định loại media
-        $type = Str::startsWith($file->getMimeType(), 'image') ? 'image' : 'video';
-        //  Tạo tên file tùy chỉnh
-        $filename = $product->slug . '-' . time() . '-' . Str::random(5) . '.' . $file->getClientOriginalExtension();
-        $path = $file->storeAs('product_media', $filename, 'public');
+public function store(UploadedFile $file, Product $product, ?ProductVariant $variant = null, bool $isThumbnail = false)
+{
+    // Debug log
+    Log::info('ImageService store called', [
+        'product_id' => $product->id,
+        'variant_id' => $variant?->id,
+        'isThumbnail' => $isThumbnail,
+        'filename' => $file->getClientOriginalName()
+    ]);
 
-        return $product->images()->create([
-            'image' => $path,
-            'alt_text' => $file->getClientOriginalName(),
-            'display_order' => $product->images()->count(),
-            'media_type' => $type,
-            'product_variant_id' => $variant?->id,
-        ]);
-    }
+    // Xác định loại media
+    $type = Str::startsWith($file->getMimeType(), 'image') ? 'image' : 'video';
 
-   public function storeMultiple(array $files, Product $product)
+    // Tạo tên file tùy chỉnh
+    $filename = $product->slug . '-' . time() . '-' . Str::random(5) . '.' . $file->getClientOriginalExtension();
+    $path = $file->storeAs('product_media', $filename, 'public');
+
+    $imageData = [
+        'image' => $path,
+        'alt_text' => $file->getClientOriginalName(),
+        'display_order' => $product->images()->count(),
+        'media_type' => $type,
+        'product_variant_id' => $variant?->id,
+        'is_thumbnail' => $isThumbnail,
+    ];
+
+    // Debug log
+    Log::info('Creating image with data', $imageData);
+
+    $image = $product->images()->create($imageData);
+
+    // Debug log
+    Log::info('Image created', [
+        'id' => $image->id,
+        'is_thumbnail' => $image->is_thumbnail,
+        'path' => $image->image
+    ]);
+
+    return $image;
+}
+    public function storeMultiple(array $files, Product $product)
     {
         $createdImages = new Collection();
 
@@ -82,5 +105,21 @@ class ImageService
         if (!empty($imageIds)) {
             $this->deleteManyByIds($imageIds);
         }
+    }
+     public function setThumbnail(int $imageId): void
+    {
+        $image = ProductImage::find($imageId);
+        if (!$image) {
+            return;
+        }
+
+        // Hủy đặt thumbnail hiện tại cho sản phẩm
+        if ($image->product_id) {
+            ProductImage::where('product_id', $image->product_id)
+                        ->update(['is_thumbnail' => false]);
+        }
+
+        // Đặt ảnh mới làm thumbnail
+        $image->update(['is_thumbnail' => true]);
     }
 }

@@ -20,6 +20,8 @@ class ProductImageResource extends JsonResource
             'url' => $this->image,
             'alt_text' => $this->alt_text,
             'display_order' => $this->display_order,
+            'is_thumbnail' => (bool) $this->is_thumbnail,
+            'product_id' => $this->product_id,
             // Chỉ hiển thị attribute_value_id nếu nó tồn tại (khác null)
             'attribute_value_id' => $this->when($this->attribute_value_id !== null, $this->attribute_value_id),
             'media_type' => $this->media_type,

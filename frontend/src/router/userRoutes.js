@@ -8,6 +8,7 @@ import Signup from "../pages/auth/Signup.vue";
 import NotFound from "../pages/NotFound.vue";
 import DefaultLayout from "../layout/DefaultLayout.vue";
 import { userGuard } from "../router/guards.js";
+import ProductFavorite from "../pages/user/favorite/ProductFavorite.vue";
 export const userRouters = [
   {
     path: "/",
@@ -30,15 +31,20 @@ export const userRouters = [
         component: About,
       },
       {
-        path:"products/:id",
-        name:"ProductDetail",
-        component:ProductDetail,
+        path: "products/:id",
+        name: "ProductDetail",
+        component: ProductDetail,
       },
       {
-        path:"cart",
-        name:"Cart",
-        component:Cart,
-      }
+        path: "cart",
+        name: "Cart",
+        component: Cart,
+      },
+      {
+        path: "favorites",
+        name: "favoriteproduct",
+        component: ProductFavorite,
+      },
     ],
   },
   // Các route khác

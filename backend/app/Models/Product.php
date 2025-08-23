@@ -68,6 +68,24 @@ class Product extends Model
     {
         return $this->hasMany(ProductReview::class);
     }
+
+    public function averageRating()
+    {
+        return $this->product_reviews()->avg('rating');
+    }
+
+    public function ratingCount()
+    {
+        return $this->product_reviews()->count();
+    }
+
+    public function getFormattedAverageRatingAttribute()
+    {
+        $avg = round($this->averageRating());
+        return str_repeat('★', $avg) . str_repeat('☆', 5 - $avg);
+    }
+
+
     public function attributeValues()
     {
         return $this->belongsToMany(AttributeValue::class, 'attribute_value_product');
@@ -80,10 +98,12 @@ class Product extends Model
             'brand',
             'category.parent',
             'images',
+            'thumbnailImage',
             'variants' => function ($query) {
                 $query->with(['attributeValues.productAttribute', 'images']);
             },
-            'attributeValues.productAttribute'
+            'attributeValues.productAttribute',
+            'product_reviews.user',
         ]);
     }
 }

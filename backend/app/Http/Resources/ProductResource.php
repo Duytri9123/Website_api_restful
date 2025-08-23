@@ -15,10 +15,6 @@ class ProductResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
-        $thumbnailUrl = null;
-        if ($this->whenLoaded('thumbnailImage') && $this->thumbnailImage) {
-            $thumbnailUrl = asset('storage/' . $this->thumbnailImage->url);
-        }
 
         return [
             'id' => $this->id,
@@ -26,18 +22,18 @@ class ProductResource extends JsonResource
             'slug' => $this->slug,
             'description' => $this->description,
             'short_description' => $this->short_description,
-
             // Lấy giá trị chuỗi của Enum để trả về qua API
             'status' => $this->status->value,
             'views' => $this->views,
-            'img_url' => $thumbnailUrl,
-
             'brand' => new BrandResource($this->whenLoaded('brand')),
             'category' => new CategoryResource($this->whenLoaded('category')),
             // Mối quan hệ danh sách (hasMany, belongsToMany)
             'images' => ProductImageResource::collection($this->whenLoaded('images')),
+            'thumbnail_image' => new ProductImageResource($this->whenLoaded('thumbnailImage')),
             'variants' => ProductVariantResource::collection($this->whenLoaded('variants')),
 
+            'avg_rating' => round($this->avg_rating ?? 0, 1),
+            'rating_count' => $this->rating_count ?? 0,
         ];
     }
 }

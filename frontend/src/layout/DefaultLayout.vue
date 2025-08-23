@@ -5,7 +5,7 @@
   <main class="container mx-auto p-2">
     <router-view></router-view>
   </main>
-  <FooterLayout />
+  <!-- <FooterLayout /> -->
   </div>
 </template>
 

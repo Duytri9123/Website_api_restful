@@ -3,7 +3,7 @@ import Dashboard from "../pages/admin/Dashboard.vue";
 import LoginAdmin from "../pages/admin/Login.vue";
 
 import ProductManager from "../pages/admin/components/ProductManager.vue";
-import CategoriesBrands from "../pages/admin/components/CategoriesWithBrands.vue";
+import CategoriesBrands from "../pages/admin/components/CategoryBrandManager.vue";
 import Member from "../pages/admin/components/TeamMember.vue";
 import { adminGuard } from "../router/guards.js";
 export const adminRouters = [
@@ -24,7 +24,7 @@ export const adminRouters = [
         component: ProductManager,
       },
       {
-        path: "categoriesbrands",
+        path: "categorybrand",
         name: "CategoriesBrands",
         component: CategoriesBrands,
       },

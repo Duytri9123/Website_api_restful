@@ -1,3 +1,120 @@
+<script setup>
+import { onMounted, ref, computed } from "vue";
+import axiosClient from "../../../axiosClient";
+
+// Reactive state
+const products = ref([]);
+const error = ref(null);
+const loading = ref(true);
+const likedProducts = ref([]);
+
+const getImageUrl = (path) =>
+  path ? `${axiosClient.defaults.baseURL}/storage/${path}` : "";
+const formatPrice = (price) => (price != null ? Number(price).toFixed(2) : "N/A");
+// View counter
+const incrementView = async (id) => {
+  try {
+    const response = await axiosClient.post(
+      `api/products/${id}/view`,
+      {},
+      {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+      }
+    );
+  } catch (err) {
+    console.error(
+      "Error incrementing view count:",
+      err.response?.data?.message || err.message
+    );
+    error.value = "Không thể tăng số lượt xem. Vui lòng thử lại.";
+  }
+};
+
+// Computed products to display
+const filteredProducts = computed(() => {
+  return products.value
+    .filter((p) => p?.status === "active")
+    .map((p) => {
+      const priceInfo = getProductPrice(p);
+      return {
+        ...p,
+        original_price: priceInfo.original_price,
+        selling_price: priceInfo.selling_price,
+        hasVariants: priceInfo.hasVariants,
+        hasDiscount: priceInfo.original_price > priceInfo.selling_price,
+        discountPercentage:
+          priceInfo.original_price > priceInfo.selling_price
+            ? Math.round(
+                ((priceInfo.original_price - priceInfo.selling_price) /
+                  priceInfo.original_price) *
+                  100
+              )
+            : 0,
+        isNew: isHighestId(p.id),
+      };
+    })
+    .filter((p) => p.selling_price > 0) 
+    .sort((a, b) => Number(b.id) - Number(a.id));
+});
+
+// Fetch products
+const fetchProducts = async () => {
+  try {
+    loading.value = true;
+    error.value = null;
+    const [popularRes, allRes] = await Promise.all([
+      axiosClient.get("api/products/popular"),
+      axiosClient.get("api/products"),
+    ]);
+    const all = allRes.data.data || [];
+    const popular = popularRes.data.data || [];
+
+    console.log("All Products:" ,all);
+    console.log("All popular",popular);
+
+    const popularIds = new Set(popular.map((p) => p.product_id));
+
+    const popularProducts = popular
+      .map((p) => {
+        const full = all.find((item) => item.id === p.product_id);
+        return full && full.status === "active"
+          ? {
+              ...full,
+              total_views: parseInt(p.total_views) || 0,
+            }
+          : null;
+      })
+      .filter(Boolean);
+
+    const additional = all
+      .filter(
+        (p) =>
+          p.status === "active" &&
+          !popularIds.has(p.id) &&
+          p.selling_price != null &&
+          p.original_price != null
+      )
+      .slice(0, 10 - popularProducts.length)
+      .map((p) => ({ ...p, total_views: 0 }));
+
+    products.value = [...popularProducts, ...additional];
+
+    console.log(products);
+  } catch (err) {
+    console.error("Error fetching products:", err);
+    error.value = "Không thể tải danh sách sản phẩm nổi bật.";
+  } finally {
+    loading.value = false;
+  }
+};
+
+onMounted(() => {
+  fetchProducts();
+});
+</script>
+
 <template>
   <div class="bg-gradient-to-br from-white to-white py-6">
     <div class="mx-auto max-w-7xl px-2 sm:px-2 lg:px-2">
@@ -73,10 +190,10 @@
           <!-- Product Image -->
           <router-link :to="`/products/${product.id}`" class="relative overflow-hidden">
             <img
-              v-if="product.product_images && product.product_images.length > 0"
+              v-if="product.thumbnail_image && product.thumbnail_image.url"
               :src="
                 getImageUrl(
-                  product.product_images[0].image_url || product.product_images[0].image
+                  product.thumbnail_image.url
                 )
               "
               :alt="product.name"
@@ -168,7 +285,11 @@
                   v-for="i in 5"
                   :key="i"
                   class="w-3 h-3"
-                  :class="i <= (product.product_reviews.rating||5)? 'text-yellow-400' : 'text-gray-300'"
+                  :class="
+                    i <= (product.product_reviews.rating || 5)
+                      ? 'text-yellow-400'
+                      : 'text-gray-300'
+                  "
                   fill="currentColor"
                   viewBox="0 0 24 24"
                 >
@@ -178,7 +299,7 @@
                 </svg>
               </div>
               <span class="text-xs text-gray-500 ml-1"
-              >({{ product.product_reviews.rating || 0 }})</span
+                >({{ product.product_reviews.rating || 0 }})</span
               >
             </div>
           </div>
@@ -249,107 +370,3 @@
     </div>
   </div>
 </template>
-
-<script setup>
-import { onMounted, ref, computed } from "vue";
-import axiosClient from "../../../axiosClient";
-
-// Reactive state
-const products = ref([]);
-const error = ref(null);
-const loading = ref(true);
-const likedProducts = ref([]);
-
-// Helpers
-const getImageUrl = (path) =>
-  path ? `${axiosClient.defaults.baseURL}/storage/${path}` : "";
-const formatPrice = (price) => (price != null ? Number(price).toFixed(2) : "N/A");
-
-// View counter
-const incrementView = async (id) => {
-  try {
-    const response = await axiosClient.post(
-      `api/products/${id}/view`,
-      {},
-      {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-      }
-    );
-  } catch (err) {
-    console.error(
-      "Error incrementing view count:",
-      err.response?.data?.message || err.message
-    );
-    error.value = "Không thể tăng số lượt xem. Vui lòng thử lại.";
-  }
-};
-// Computed products to display
-const filteredProducts = computed(() =>
-  products.value
-    .filter(
-      (p) => p?.status === "active" && p.selling_price != null && p.original_price != null
-    )
-    .map((p) => ({
-      ...p,
-      original_price: Number(p.original_price) || 0,
-      selling_price: Number(p.selling_price) || 0,
-    }))
-);
-
-// Fetch products
-const fetchProducts = async () => {
-  try {
-    loading.value = true;
-    error.value = null;
-
-    await axiosClient.get("/sanctum/csrf-cookie");
-
-    const [popularRes, allRes] = await Promise.all([
-      axiosClient.get("api/products/popular"),
-      axiosClient.get("api/products"),
-    ]);
-    const all = allRes.data || [];
-    const popular = popularRes.data || [];
-
-    const popularIds = new Set(popular.map((p) => p.product_id));
-
-    const popularProducts = popular
-      .map((p) => {
-        const full = all.find((item) => item.id === p.product_id);
-        return full && full.status === "active"
-          ? {
-              ...full,
-              total_views: parseInt(p.total_views) || 0,
-            }
-          : null;
-      })
-      .filter(Boolean);
-
-    const additional = all
-      .filter(
-        (p) =>
-          p.status === "active" &&
-          !popularIds.has(p.id) &&
-          p.selling_price != null &&
-          p.original_price != null
-      )
-      .slice(0, 10 - popularProducts.length)
-      .map((p) => ({ ...p, total_views: 0 }));
-
-    products.value = [...popularProducts, ...additional];
-
-    console.log(products);
-  } catch (err) {
-    console.error("Error fetching products:", err);
-    error.value = "Không thể tải danh sách sản phẩm nổi bật.";
-  } finally {
-    loading.value = false;
-  }
-};
-
-onMounted(() => {
-  fetchProducts();
-});
-</script>

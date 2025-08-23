@@ -29,7 +29,6 @@ const props = defineProps({
     default: () => [],
   },
 });
-
 //emit
 const emit = defineEmits(["productSubmitted", "formClosed", "requestRefreshAttributes"]);
 
@@ -51,6 +50,8 @@ const attributeValuesMap = reactive({});
 const error = ref(null);
 const productImages = ref([]);
 const variants = ref([]);
+const selectedThumbnailImageIndex = ref(null);
+const selectedExistingThumbnailImageId = ref(null);
 
 // Form data
 const form = reactive({
@@ -85,10 +86,8 @@ const getLeafCategories = computed(() => {
   const findLeaves = (cats) => {
     cats.forEach((cat) => {
       if (cat.children && cat.children.length > 0) {
-        // Nếu có con, tiếp tục đệ quy vào các danh mục con
         findLeaves(cat.children);
       } else {
-        // Nếu không có con, đây là danh mục lá, thêm vào danh sách
         leafCategories.push(cat);
       }
     });
@@ -100,7 +99,9 @@ const getLeafCategories = computed(() => {
 
 const isImageTaken = computed(() => (imageIndex, currentVariantIndex) => {
   for (let i = 0; i < variants.value.length; i++) {
-    if (i === currentVariantIndex || variants.value[i]._deleted) continue;
+    if (i === currentVariantIndex) continue;
+
+    if (variants.value[i]._deleted && !variants.value[i].id) continue;
 
     if (
       variants.value[i].image_indexes &&
@@ -132,7 +133,6 @@ const availableAttributes = computed(
   }
 );
 
-// Modal functions
 const toggleAddAttribute = () => {
   isAttributeModal.value = !isAttributeModal.value;
 };
@@ -158,7 +158,6 @@ watch(
   () => props.productData,
   async (newProduct) => {
     if (newProduct) {
-      // Khi có productData (editing)
       Object.assign(form, {
         name: newProduct.name,
         description: newProduct.description,
@@ -175,23 +174,30 @@ watch(
         newProduct.category && newProduct.category.id !== null
           ? Number(newProduct.category.id)
           : null;
-
-      // Điền productImages từ dữ liệu có sẵn
       if (newProduct.images && Array.isArray(newProduct.images)) {
-        productImages.value = newProduct.images.map((img) => ({
-          id: img.id,
-          url: getImageUrl(img.url),
-          alt: img.alt || "",
-          highlighted: img.highlighted || false,
-          file: null, // Đánh dấu đây là ảnh đã có, không phải file mới upload
-        }));
+        productImages.value = newProduct.images.map((img, index) => {
+          if (img.is_thumbnail) {
+            selectedExistingThumbnailImageId.value = img.id;
+            selectedThumbnailImageIndex.value = index;
+          }
+          return {
+            id: img.id,
+            url: getImageUrl(img.url),
+            alt: img.alt_text || "",
+            is_thumbnail: img.is_thumbnail || false,
+            is_new: false,
+            file: null,
+          };
+        });
         console.log("Images assigned to productImages:", productImages.value);
       } else {
-        productImages.value = []; // Nếu không có ảnh, đặt là mảng rỗng
-        console.log("newProduct.images is empty or not an array."); // Thêm log này
+        productImages.value = [];
+        selectedExistingThumbnailImageId.value = null;
+        selectedThumbnailImageIndex.value = null;
+        console.log("newProduct.images is empty or not an array.");
       }
 
-      variants.value = []; // Reset variants trước khi điền
+      variants.value = [];
       for (const variantData of newProduct.variants || []) {
         const newVariant = reactive({
           id: variantData.id,
@@ -203,33 +209,27 @@ watch(
           dimensions: variantData.dimensions,
           weight: variantData.weight,
           _deleted: false,
+          attribute_selection: [],
+
           image_indexes: variantData.image_indexes
             ? [...variantData.image_indexes].map(Number)
             : [],
-          attribute_selection: [],
         });
 
         if (variantData.attribute_values && variantData.attribute_values.length > 0) {
-          console.log("Processing attribute values:", variantData.attribute_values);
-          console.log("Available attributes:", props.attributes);
           const attributeGroups = {};
           for (const av of variantData.attribute_values) {
             console.log(av);
-
             const foundAttributeId = av.attribute ? av.attribute.id : null;
 
             if (foundAttributeId) {
-              if (!attributeGroups[foundAttributeId]) {
-                attributeGroups[foundAttributeId] = reactive({
-                  selectedAttributeId: foundAttributeId,
-                  selectedAttributeValueIds: [],
-                });
-                // Vẫn fetch attribute values nếu chưa có trong map
-                if (!attributeValuesMap[foundAttributeId]) {
-                  await fetchAttributeValues(foundAttributeId);
-                }
+              attributeGroups[foundAttributeId] = reactive({
+                selectedAttributeId: foundAttributeId,
+                selectedAttributeValueId: av.id,
+              });
+              if (!attributeValuesMap[foundAttributeId]) {
+                await fetchAttributeValues(foundAttributeId);
               }
-              attributeGroups[foundAttributeId].selectedAttributeValueIds.push(av.id);
             } else {
               console.warn(
                 `Không tìm thấy thuộc tính cho giá trị thuộc tính ID ${av.id}`
@@ -239,14 +239,12 @@ watch(
           newVariant.attribute_selection = Object.values(attributeGroups);
         } else {
           newVariant.attribute_selection.push(
-            reactive({ selectedAttributeId: null, selectedAttributeValueIds: [] })
+            reactive({ selectedAttributeId: null, selectedAttributeValueIds: null })
           );
         }
-
         variants.value.push(newVariant);
       }
     } else {
-      // Khi không có productData (chế độ thêm mới), reset form hoàn toàn
       Object.assign(form, {
         name: null,
         description: null,
@@ -258,10 +256,11 @@ watch(
         deleted_images: [],
       });
       productImages.value = [];
-      variants.value = []; // Reset variants
+      selectedThumbnailImageIndex.value = null;
+      selectedExistingThumbnailImageId.value = null;
+      variants.value = [];
       error.value = null;
     }
-    // Đảm bảo Flowbite được init lại sau khi DOM có thể thay đổi
     nextTick(() => {
       initFlowbite();
     });
@@ -273,7 +272,6 @@ watch(
   () => props.showModal,
   (newVal) => {
     if (!newVal) {
-      // Nếu modal đóng, reset form để chuẩn bị cho lần mở tiếp theo
       Object.assign(form, {
         name: null,
         description: null,
@@ -287,7 +285,8 @@ watch(
       productImages.value = [];
       variants.value = [];
       error.value = null;
-      // Đóng cả các modal con nếu chúng đang mở
+      selectedThumbnailImageIndex.value = null;
+      selectedExistingThumbnailImageId.value = null;
       isAttributeModal.value = false;
       isAttributeValueModal.value = false;
     }
@@ -298,7 +297,7 @@ const closeForm = () => {
   emit("formClosed");
   error.value = null;
 };
-// Variant functions
+
 const toggleAddVariant = () => {
   const hasDefault = variants.value.some((v) => v.is_default === "1");
   variants.value.push({
@@ -308,7 +307,7 @@ const toggleAddVariant = () => {
     quantity: null,
     is_default: hasDefault ? "0" : "1",
     image_indexes: [],
-    attribute_selection: [{ selectedAttributeId: null, selectedAttributeValueIds: [] }],
+    attribute_selection: [{ selectedAttributeId: null, selectedAttributeValueIds: null }],
     dimensions: null,
     weight: null,
     id: null,
@@ -321,7 +320,7 @@ const addAttributeGroup = (variantIndex) => {
     variants.value[variantIndex].attribute_selection = [];
   }
   variants.value[variantIndex].attribute_selection.push(
-    reactive({ selectedAttributeId: null, selectedAttributeValueIds: [] })
+    reactive({ selectedAttributeId: null, selectedAttributeValueIds: null })
   );
 };
 
@@ -338,7 +337,7 @@ const toggleVariantMainImage = (variantIndex, imageIndexToToggle) => {
   if (existingIndexPosition > -1) {
     variant.image_indexes.splice(existingIndexPosition, 1);
   } else {
-    if (isImageTaken.value(imageIndexToToggle, variantIndex)) {
+    if (!variant._deleted && isImageTaken.value(imageIndexToToggle, variantIndex)) {
       alert("Hình ảnh này đã được gán cho một biến thể khác.");
       return;
     }
@@ -346,7 +345,7 @@ const toggleVariantMainImage = (variantIndex, imageIndexToToggle) => {
     variant.image_indexes.push(imageIndexToToggle);
   }
 };
-
+// remove variant
 const removeVariant = (index) => {
   if (confirm("Are you sure you want to remove this variant?")) {
     const variantToRemove = variants.value[index];
@@ -367,9 +366,11 @@ const handleFileChange = (event) => {
       productImages.value.push({
         url: e.target.result,
         alt: file.name,
+        is_thumbnail: false,
         highlighted: false,
         file,
         id: null,
+        is_new: true,
       });
       form.product_images.push(file);
     };
@@ -380,24 +381,88 @@ const handleFileChange = (event) => {
 const removeImage = async (index) => {
   if (index >= 0 && index < productImages.value.length) {
     const image = productImages.value[index];
+
+    // Thêm vào danh sách ảnh bị xóa nếu có ID
     if (image.id) form.deleted_images.push(image.id);
 
+    // Xóa file khỏi form.product_images nếu là ảnh mới
     if (image.file) {
       const fileIndex = form.product_images.findIndex((f) => f === image.file);
       if (fileIndex > -1) form.product_images.splice(fileIndex, 1);
     }
 
+    // Reset thumbnail nếu ảnh bị xóa là thumbnail
+    if (image.is_thumbnail) {
+      selectedThumbnailImageIndex.value = null;
+      selectedExistingThumbnailImageId.value = null;
+    }
+
+    // Xóa ảnh khỏi mảng
     productImages.value.splice(index, 1);
 
     variants.value.forEach((variant) => {
-      if (!variant._deleted) {
+      if (variant.image_indexes && variant.image_indexes.length > 0) {
+        // Loại bỏ index của ảnh bị xóa
         variant.image_indexes = variant.image_indexes.filter((idx) => idx !== index);
+
+        // Điều chỉnh các index phía sau về phía trước
         variant.image_indexes = variant.image_indexes.map((idx) =>
           idx > index ? idx - 1 : idx
         );
       }
     });
+
+    // Cập nhật selectedThumbnailImageIndex
+    if (selectedThumbnailImageIndex.value !== null) {
+      if (selectedThumbnailImageIndex.value === index) {
+        selectedThumbnailImageIndex.value = null;
+        selectedExistingThumbnailImageId.value = null;
+      } else if (selectedThumbnailImageIndex.value > index) {
+        selectedThumbnailImageIndex.value--;
+      }
+    }
   }
+};
+
+const selectThumbnail = (index) => {
+  // Reset tất cả thumbnail trước
+  productImages.value.forEach((img) => {
+    img.is_thumbnail = false;
+  });
+
+  // Set thumbnail mới
+  selectedThumbnailImageIndex.value = index;
+  if (productImages.value[index]) {
+    productImages.value[index].is_thumbnail = true;
+
+    // Nếu là ảnh có sẵn (có ID)
+    if (productImages.value[index].id) {
+      selectedExistingThumbnailImageId.value = productImages.value[index].id;
+    } else {
+      selectedExistingThumbnailImageId.value = null;
+    }
+  }
+};
+
+// tim vi tri index
+const validateImageIndexes = () => {
+  const errors = [];
+
+  variants.value.forEach((variant, variantIndex) => {
+    if (variant._deleted) return;
+
+    if (variant.image_indexes && variant.image_indexes.length > 0) {
+      variant.image_indexes.forEach((imgIndex) => {
+        if (imgIndex < 0 || imgIndex >= productImages.value.length) {
+          errors.push(
+            `Variant ${variantIndex + 1} có index ảnh không hợp lệ: ${imgIndex}`
+          );
+        }
+      });
+    }
+  });
+
+  return errors;
 };
 
 // Submit functions
@@ -405,32 +470,113 @@ const submitProduct = async () => {
   error.value = null;
   const formData = new FormData();
 
-  // Basic product data
+  // Validate image indexes trước khi submit
+  const validationErrors = validateImageIndexes();
+  if (validationErrors.length > 0) {
+    error.value = validationErrors.join("\n");
+    return;
+  }
+
   formData.append("name", form.name || "");
   formData.append("description", form.description || "");
   formData.append("short_description", form.short_description || "");
   formData.append("brand_id", form.brand_id || "");
   formData.append("category_id", form.category_id || "");
   formData.append("status", form.status || "active");
-
   if (props.isEditing) formData.append("_method", "PUT");
 
-  // Product images
-  form.product_images.forEach((file, index) => {
-    formData.append(`images[${index}]`, file);
-  });
-
+  // image
+  if (props.isEditing) {
+    form.product_images.forEach((file, index) => {
+      formData.append(`new_images[${index}]`, file);
+    });
+  } else {
+    form.product_images.forEach((file, index) => {
+      formData.append(`images[${index}]`, file);
+    });
+  }
   form.deleted_images.forEach((id) => {
     formData.append(`deleted_images[]`, id);
   });
 
-  // Variants
+  if (selectedThumbnailImageIndex.value !== null) {
+    const selectedImage = productImages.value[selectedThumbnailImageIndex.value];
+    if (selectedImage) {
+      if (selectedImage.id && !selectedImage.is_new) {
+        // Ảnh có sẵn từ database
+        formData.append("existing_image_thumbnail_id", selectedImage.id);
+      } else if (selectedImage.file) {
+        // Ảnh mới được upload
+        const newImageFileIndex = form.product_images.findIndex(
+          (f) => f === selectedImage.file
+        );
+        if (newImageFileIndex !== -1) {
+          formData.append("thumbnail_image_index", newImageFileIndex);
+        }
+      }
+    }
+  }
   const validVariants = variants.value.filter((v) => !v._deleted);
-  if (validVariants.length === 0) {
-    error.value = "Sản phẩm phải có ít nhất một biến thể.";
+  const variantCombinations = new Set();
+  let hasDuplicateCombination = false;
+
+  for (const variant of validVariants) {
+    const attributeValueIds = [];
+    const usedAttributeInVariant = new Set();
+
+    if (variant.attribute_selection) {
+      for (const group of variant.attribute_selection) {
+        if (
+          group.selectedAttributeId &&
+          group.selectedAttributeValueId !== null &&
+          group.selectedAttributeValueId !== undefined
+        ) {
+          if (usedAttributeInVariant.has(group.selectedAttributeId)) {
+            error.value = `Biến thể này có thuộc tính trùng lặp. Mỗi thuộc tính chỉ được chọn một lần cho mỗi biến thể.`;
+            hasDuplicateCombination = true;
+            break;
+          }
+          usedAttributeInVariant.add(group.selectedAttributeId);
+          attributeValueIds.push(group.selectedAttributeValueId);
+        }
+      }
+    }
+
+    if (hasDuplicateCombination) {
+      break;
+    }
+
+    attributeValueIds.sort((a, b) => a - b);
+    const combinationKey = attributeValueIds.join("-");
+
+    if (
+      combinationKey === "" &&
+      attributeValueIds.length === 0 &&
+      validVariants.length > 1
+    ) {
+      error.value =
+        "Không thể có biến thể nào không có thuộc tính nếu có nhiều hơn một biến thể. Vui lòng thêm thuộc tính cho tất cả các biến thể hoặc chỉ có một biến thể không có thuộc tính.";
+      hasDuplicateCombination = true;
+      break;
+    }
+
+    if (variantCombinations.has(combinationKey)) {
+      error.value = `Có biến thể bị trùng lặp tổ hợp thuộc tính: ${combinationKey}. Mỗi biến thể phải có tổ hợp thuộc tính duy nhất.`;
+      hasDuplicateCombination = true;
+      break;
+    }
+    variantCombinations.add(combinationKey);
+  }
+  if (hasDuplicateCombination) {
     return;
   }
-
+  if (validVariants.length === 0) {
+    if (!props.isEditing) {
+      error.value = "Sản phẩm phải có ít nhất một biến thể.";
+      return;
+    }
+  }
+  // end
   validVariants.forEach((variant, variantIndex) => {
     if (variant.id) formData.append(`variants[${variantIndex}][id]`, variant.id);
 
@@ -473,31 +619,52 @@ const submitProduct = async () => {
       formData.append(`variants[${variantIndex}][weight]`, variant.weight);
     }
 
-    // Image indexes
     if (variant.image_indexes && variant.image_indexes.length > 0) {
-      variant.image_indexes.forEach((imgIndex, i) => {
-        formData.append(`variants[${variantIndex}][image_indexes][${i}]`, imgIndex);
+      let existingImageIds = [];
+      let newImageIndexes = [];
+
+      variant.image_indexes.forEach((imgIndex) => {
+        const image = productImages.value[imgIndex];
+        if (image && image.id) {
+          // Ảnh đã tồn tại
+          existingImageIds.push(image.id);
+        } else if (image && image.file) {
+          // Ảnh mới - tìm index trong mảng form.product_images
+          const newImageIndex = form.product_images.findIndex((f) => f === image.file);
+          if (newImageIndex !== -1) {
+            newImageIndexes.push(newImageIndex);
+          }
+        }
+      });
+
+      // Gửi ID của ảnh cũ
+      existingImageIds.forEach((id, i) => {
+        formData.append(`variants[${variantIndex}][existing_image_ids][${i}]`, id);
+      });
+
+      // Gửi index của ảnh mới
+      newImageIndexes.forEach((idx, i) => {
+        formData.append(`variants[${variantIndex}][new_image_indexes][${i}]`, idx);
       });
     } else {
-      formData.append(`variants[${variantIndex}][image_indexes][]`, "");
+      formData.append(`variants[${variantIndex}][existing_image_ids][]`, "");
+      formData.append(`variants[${variantIndex}][new_image_indexes][]`, "");
     }
 
-    // Attribute values
+    //attribute
     let combinedAttributeValueIds = [];
     if (variant.attribute_selection && variant.attribute_selection.length > 0) {
       variant.attribute_selection.forEach((attrGroup) => {
         if (
           attrGroup.selectedAttributeId &&
-          attrGroup.selectedAttributeValueIds &&
-          attrGroup.selectedAttributeValueIds.length > 0
+          attrGroup.selectedAttributeValueId !== null &&
+          attrGroup.selectedAttributeValueId !== undefined
         ) {
-          combinedAttributeValueIds = combinedAttributeValueIds.concat(
-            attrGroup.selectedAttributeValueIds
-          );
+          combinedAttributeValueIds.push(attrGroup.selectedAttributeValueId);
         }
       });
     }
-
+    // Đảm bảo tính duy nhất trong các giá trị thuộc tính của biến thể này
     combinedAttributeValueIds = [...new Set(combinedAttributeValueIds)];
     if (combinedAttributeValueIds.length > 0) {
       combinedAttributeValueIds.forEach((valueId) => {
@@ -508,23 +675,36 @@ const submitProduct = async () => {
     }
   });
 
-  // Deleted variants
   const deletedVariantIds = variants.value
     .filter((v) => v._deleted && v.id)
     .map((v) => v.id);
   deletedVariantIds.forEach((id) => {
     formData.append(`deleted_variant_ids[]`, id);
   });
+  console.log(
+    "Variants with image assignments:",
+    variants.value.map((v) => ({
+      id: v.id,
+      image_indexes: v.image_indexes,
+      attribute_selection: v.attribute_selection,
+    }))
+  );
 
+  // Debug FormData
+  console.log("=== FORM DATA DEBUG ===");
+  for (let pair of formData.entries()) {
+    console.log(pair[0] + ": " + pair[1]);
+  }
   // Debug log
   for (let pair of formData.entries()) {
     console.log(pair[0] + ": " + pair[1]);
   }
+  // success product
   try {
     let response;
     if (props.isEditing) {
       response = await axiosAdmin.post(
-        `/api/products/${props.productData.id}`, // Sử dụng props.productData.id
+        `/api/products/${props.productData.id}`,
         formData,
         {
           headers: { "Content-Type": "multipart/form-data" },
@@ -558,8 +738,7 @@ const addAttribute = async () => {
     return;
   }
   try {
-    const response = await axiosAdmin.post("/api/attributes", formAttribute);
-
+    await axiosAdmin.post("/api/attributes", formAttribute);
     alert("Attribute added successfully!");
     formAttribute.name = null;
     isAttributeModal.value = false;
@@ -588,13 +767,12 @@ const addAttributeValue = async () => {
     formAttributeValue.value = null;
     formAttributeValue.code = null;
     isAttributeValueModal.value = false;
-    emit("requestRefreshAttributes");
+    fetchAttributeValues();
   } catch (err) {
     console.error("Error adding attribute value:", err);
     error.value = "Failed to add attribute value. Please try again.";
   }
 };
-
 
 onMounted(async () => {});
 </script>
@@ -823,7 +1001,7 @@ onMounted(async () => {});
                     type="button"
                     @click="removeImage(index)"
                     class="absolute -bottom-2 -left-2 bg-red-500 hover:bg-red-600 text-white p-1 rounded-full text-xs"
-                    :class="{ 'bg-red-600': img.highlighted }"
+                    :class="{ 'bg-red-600': img.is_thumbnail }"
                     title="Remove image"
                   >
                     <svg
@@ -839,6 +1017,21 @@ onMounted(async () => {});
                       ></path>
                     </svg>
                   </button>
+
+                  <label
+                    :for="`thumbnail-radio-${index}`"
+                    class="absolute -bottom-2 -right-2"
+                  >
+                    <input
+                      type="radio"
+                      :id="`thumbnail-radio-${index}`"
+                      :value="index"
+                      v-model="selectedThumbnailImageIndex"
+                      @change="selectThumbnail(index)"
+                      class="form-radio h-5 w-5 text-blue-600"
+                    />
+                    <span class="sr-only">Đặt làm thumbnail</span>
+                  </label>
                 </div>
               </div>
 
@@ -1069,6 +1262,8 @@ onMounted(async () => {});
               v-for="(variant, index) in variants"
               :key="index"
               class="border bg-pink-50 rounded-lg p-4 grid gap-4 mb-4 sm:grid-cols-1"
+              :class="{ 'opacity-50 line-through': variant._deleted }"
+              v-show="!variant._deleted"
             >
               <div class="flex justify-between items-center">
                 <h5 class="text-lg font-semibold text-gray-900 dark:text-white">
@@ -1233,88 +1428,90 @@ onMounted(async () => {});
                     </button>
                   </div>
 
-                  <div
-                    v-for="(attrGroup, attrGroupIndex) in variant.attribute_selection"
-                    :key="'variant-' + index + '-group-' + attrGroupIndex"
-                    class="border rounded-lg p-2 grid gap-4 mb-4 sm:grid-cols-7 bg-yellow-50 dark:bg-yellow-900"
-                  >
-                    <div class="sm:col-span-3">
-                      <label
-                        :for="`variant_attribute_${index}_${attrGroupIndex}`"
-                        class="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-                        >Attribute</label
-                      >
-                      <select
-                        v-model="attrGroup.selectedAttributeId"
-                        @change="
-                          attrGroup.selectedAttributeValueIds = []; // Đặt lại các giá trị đã chọn
-                          fetchAttributeValues(attrGroup.selectedAttributeId);
-                        "
-                        :id="`variant_attribute_${index}_${attrGroupIndex}`"
-                        class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-                      >
-                        <option :value="null" disabled>Chọn một thuộc tính</option>
-                        <option
-                          v-for="attribute in availableAttributes(
-                            attrGroup.selectedAttributeId,
-                            index,
-                            attrGroupIndex
-                          )"
-                          :key="attribute.id"
-                          :value="attribute.id"
+                  <div class="grid gap-4 mb-4 sm:grid-cols-1">
+                    <div
+                      v-for="(attrGroup, attrGroupIndex) in variant.attribute_selection"
+                      :key="'variant-' + index + '-group-' + attrGroupIndex"
+                      class="border rounded-lg p-2 grid gap-4 mb-4 sm:grid-cols-7 bg-yellow-50 dark:bg-yellow-900"
+                    >
+                      <div class="sm:col-span-3">
+                        <label
+                          :for="`variant_attribute_${index}_${attrGroupIndex}`"
+                          class="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+                          >Attribute</label
                         >
-                          {{ attribute.name }}
-                        </option>
-                      </select>
-                    </div>
-                    <div class="sm:col-span-3">
-                      <label
-                        :for="`variant_attribute_value_${index}_${attrGroupIndex}`"
-                        class="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-                        >Attribute value</label
-                      >
-                      <select
-                        v-model="attrGroup.selectedAttributeValueIds"
-                        :id="`variant_attribute_value_${index}_${attrGroupIndex}`"
-                        class="bg-gray-50 border h-22 border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-                        multiple
-                        :disabled="
-                          !attrGroup.selectedAttributeId ||
-                          !attributeValuesMap[attrGroup.selectedAttributeId] ||
-                          attributeValuesMap[attrGroup.selectedAttributeId].length === 0
-                        "
-                      >
-                        <option
-                          v-for="value in attributeValuesMap[
-                            attrGroup.selectedAttributeId
-                          ]"
-                          :key="value.id"
-                          :value="value.id"
+                        <select
+                          v-model="attrGroup.selectedAttributeId"
+                          @change="
+                            attrGroup.selectedAttributeValueId = null; // Đặt lại giá trị đã chọn
+                            fetchAttributeValues(attrGroup.selectedAttributeId);
+                          "
+                          :id="`variant_attribute_${index}_${attrGroupIndex}`"
+                          class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
                         >
-                          {{ value.value }}
-                        </option>
-                      </select>
-                    </div>
-                    <div class="flex items-center justify-end sm:col-span-1">
-                      <button
-                        type="button"
-                        @click="removeAttributeGroup(index, attrGroupIndex)"
-                        class="p-2.5 text-sm font-medium text-white bg-red-700 rounded-lg hover:bg-red-800 focus:ring-4 focus:outline-none focus:ring-red-300 dark:bg-red-600 dark:hover:bg-red-700 dark:focus:ring-red-800"
-                        title="Remove variant"
-                      >
-                        <svg
-                          class="w-2 h-2"
-                          fill="currentColor"
-                          viewBox="0 0 20 20"
-                          xmlns="http://www.w3.org/2000/svg"
+                          <option :value="null" disabled>select attribute</option>
+                          <option
+                            v-for="attribute in availableAttributes(
+                              attrGroup.selectedAttributeId,
+                              index,
+                              attrGroupIndex
+                            )"
+                            :key="attribute.id"
+                            :value="attribute.id"
+                          >
+                            {{ attribute.name }}
+                          </option>
+                        </select>
+                      </div>
+                      <div class="sm:col-span-3">
+                        <label
+                          :for="`variant_attribute_value_${index}_${attrGroupIndex}`"
+                          class="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+                          >value</label
                         >
-                          <path
-                            fill-rule="evenodd"
-                            d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 011-1h4a1 1 0 110 2H8a1 1 0 01-1-1zm1 3a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1v-4a1 1 0 00-1-1H8z"
-                            clip-rule="evenodd"
-                          ></path>
-                        </svg>
-                      </button>
+                        <select
+                          :id="`variant_attribute_value_${index}_${attrGroupIndex}`"
+                          v-model="attrGroup.selectedAttributeValueId"
+                          class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5"
+                          :disabled="
+                            !attrGroup.selectedAttributeId ||
+                            !attributeValuesMap[attrGroup.selectedAttributeId] ||
+                            attributeValuesMap[attrGroup.selectedAttributeId].length === 0
+                          "
+                        >
+                          <option :value="null" disabled>select value</option>
+                          <option
+                            v-for="val in attributeValuesMap[
+                              attrGroup.selectedAttributeId
+                            ] || []"
+                            :key="val.id"
+                            :value="val.id"
+                          >
+                            {{ val.value }}
+                          </option>
+                        </select>
+                      </div>
+                      <div class="flex items-center justify-end sm:col-span-1">
+                        <button
+                          type="button"
+                          @click="removeAttributeGroup(index, attrGroupIndex)"
+                          class="p-2.5 text-sm font-medium text-white bg-red-700 rounded-lg hover:bg-red-800 focus:ring-4 focus:outline-none focus:ring-red-300 dark:bg-red-600 dark:hover:bg-red-700 dark:focus:ring-red-800"
+                          title="remove"
+                        >
+                          <svg
+                            class="w-2 h-2"
+                            fill="currentColor"
+                            viewBox="0 0 20 20"
+                            xmlns="http://www.w3.org/2000/svg"
+                          >
+                            <path
+                              fill-rule="evenodd"
+                              d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 011-1h4a1 1 0 110 2H8a1 1 0 01-1-1zm1 3a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1v-4a1 1 0 00-1-1H8z"
+                              clip-rule="evenodd"
+                            ></path>
+                          </svg>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
