@@ -6,6 +6,8 @@ use App\Http\Controllers\CategoriesController;
 use App\Http\Controllers\ProductAttributeController;
 use App\Http\Controllers\ProductsController;
 use App\Http\Controllers\ViewProductController;
+use App\Http\Controllers\CartController;
+use App\Models\Cart;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -38,7 +40,6 @@ Route::get('/brands/{brand}', [BrandsController::class, 'show']);
 Route::get('/attributes', [ProductAttributeController::class, 'index']);
 Route::get('/attributes/{attribute}', [ProductAttributeController::class, 'show']);
 Route::get('/attributes/{attribute}/values', [AttributeValueController::class, 'index']);
-
 
 // Routes chỉ dành cho Admin
 // User có thể xem danh sách và chi tiết, nhưng không thể tạo/sửa/xóa

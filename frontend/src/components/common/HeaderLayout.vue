@@ -163,7 +163,7 @@ onBeforeUnmount(() => {
       aria-label="Main navigation"
     >
       <!-- Desktop user dropdown -->
-      <div class="flex items-center lg:order-1 space-x-16 rtl:space-x-reverse">
+      <div class="w-1/2 flex items-center lg:order-1 space-x-16 rtl:space-x-reverse">
         <!-- logo -->
         <a href="/" class="flex items-center space-x-3 rtl:space-x-reverse">
           <img
@@ -460,7 +460,7 @@ onBeforeUnmount(() => {
         @submit.prevent="performSearch"
         v-if="mobileSearchInputOpen"
         ref="mobileSearchFormRef"
-        class="w-full relative lg:hidden mt-4"
+        class="w-full relative lg:hidden mt-4 "
       >
         <div
           class="absolute inset-y-0 start-0 flex items-center ps-3 pointer-events-none"
